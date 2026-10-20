@@ -30,6 +30,7 @@ const InstallerContainer = lazy(() => import('@/components/server/installer/Inst
 const NetworkContainer = lazy(() => import('@/components/server/network/NetworkContainer'));
 const ServerActivityLogContainer = lazy(() => import('@/components/server/ServerActivityLogContainer'));
 const ScheduleContainer = lazy(() => import('@/components/server/schedules/ScheduleContainer'));
+const ModpacksContainer = lazy(() => import('@/components/server/modpacks/ModpacksContainer'));
 const PlayersContainer = lazy(() => import('@/components/server/players/PlayersContainer'));
 const SettingsContainer = lazy(() => import('@/components/server/settings/SettingsContainer'));
 const SoftwareContainer = lazy(() => import('@/components/server/software/SoftwareContainer'));
@@ -186,6 +187,16 @@ const routes: Routes = {
             icon: BranchesDown,
             featureLimit: 'network',
             end: true,
+        },
+        {
+            route: 'modpacks/*',
+            path: 'modpacks',
+            permission: 'startup.software',
+            name: 'Modpacks',
+            component: ModpacksContainer,
+            icon: ArrowDownToLine,
+            end: true,
+            eggFeature: /^eula$/i,
         },
         {
             route: 'players/*',

@@ -5,6 +5,7 @@ use App\Http\Middleware\CheckDaemonType;
 use Pterodactyl\Http\Controllers\Api\Client;
 use Pterodactyl\Http\Controllers\Api\Client\Servers\MarketplaceController;
 use Pterodactyl\Http\Controllers\Api\Client\Servers\MinecraftPlayersController;
+use Pterodactyl\Http\Controllers\Api\Client\Servers\ModpacksController;
 use Pterodactyl\Http\Middleware\Activity\ServerSubject;
 use Pterodactyl\Http\Middleware\Activity\AccountSubject;
 use Pterodactyl\Http\Controllers\Api\Client\Servers\Elytra;
@@ -121,6 +122,18 @@ Route::group([
 
         Route::get('/game-versions', [MarketplaceController::class, 'gameVersions'])
             ->name('api.client.servers.marketplace.game-versions');
+    });
+
+    // One-click Modrinth modpack installs (fresh install).
+    Route::group(['prefix' => '/modpacks'], function () {
+        Route::get('/search', [ModpacksController::class, 'search'])
+            ->middleware('throttle:40,1,mc-modpacks-browse');
+        Route::get('/versions', [ModpacksController::class, 'versions'])
+            ->middleware('throttle:40,1,mc-modpacks-browse');
+        Route::get('/status', [ModpacksController::class, 'status'])
+            ->middleware('throttle:60,1,mc-modpacks-status');
+        Route::post('/install', [ModpacksController::class, 'install'])
+            ->middleware('throttle:3,1,mc-modpacks-install');
     });
 
     // Minecraft Java player list, moderation actions and saved inventories.

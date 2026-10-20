@@ -17,6 +17,7 @@ import {
     Home01Icon,
     Link01Icon,
     NoteIcon,
+    PackageIcon,
     RocketIcon,
     ServerStack02Icon,
     Settings02Icon,
@@ -197,6 +198,7 @@ const UnifiedRouter = () => {
     const NavigationShell = useRef(null);
     const NavigationInstaller = useRef(null);
     const NavigationPlayers = useRef(null);
+    const NavigationModpacks = useRef(null);
     const CustomNavigationOne = useRef<HTMLAnchorElement>(null);
     const CustomNavigationTwo = useRef<HTMLAnchorElement>(null);
     const CustomNavigationThree = useRef<HTMLAnchorElement>(null);
@@ -260,6 +262,15 @@ const UnifiedRouter = () => {
                                           ref: NavigationPlayers,
                                           end: true,
                                           permission: 'control.console',
+                                      },
+                                      {
+                                          to: `/server/${id}/modpacks`,
+                                          icon: PackageIcon,
+                                          text: 'Modpacks',
+                                          tabName: 'modpacks',
+                                          ref: NavigationModpacks,
+                                          end: true,
+                                          permission: 'startup.software',
                                       },
                                   ]
                                 : []),
