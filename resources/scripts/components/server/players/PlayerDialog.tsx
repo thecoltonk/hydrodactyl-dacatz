@@ -11,6 +11,7 @@ import {
     type Player,
     type PlayerAction,
     type PlayerCapabilities,
+    type PlayerSkin,
     sendPlayerAction,
 } from '@/api/server/players';
 import { Dialog } from '@/components/elements/dialog';
@@ -19,6 +20,7 @@ import { Button } from '@/components/ui/button';
 
 import InventoryView from './InventoryView';
 import PlayerAvatar from './PlayerAvatar';
+import SkinPanel from './SkinPanel';
 import useNitroIdentity from './useNitroIdentity';
 
 export const actions: {
@@ -65,12 +67,19 @@ export default function PlayerDialog({
     capabilities,
     onClose,
     onNotice,
+    offline = false,
+    skin,
+    onSkinChanged = () => undefined,
 }: {
     uuid: string;
     player: Player;
     capabilities: PlayerCapabilities;
     onClose: () => void;
     onNotice: (message: string) => void;
+    /** Server runs with online-mode=false. */
+    offline?: boolean;
+    skin?: PlayerSkin;
+    onSkinChanged?: () => void;
 }) {
     const [tab, setTab] = useState<'profile' | 'inventory'>('profile');
     const [action, setAction] = useState<PlayerAction | null>(null);
@@ -80,7 +89,7 @@ export default function PlayerDialog({
     const [submitted, setSubmitted] = useState('');
     const [renderFailed, setRenderFailed] = useState(false);
     const { mutate } = useSWRConfig();
-    const identity = useNitroIdentity(player.name);
+    const identity = useNitroIdentity(player.name, !offline);
     const inventory = useSWR(
         tab === 'inventory' && capabilities.inventory
             ? ['minecraft-players:inventory', uuid, player.name, player.uuid]
@@ -176,7 +185,7 @@ export default function PlayerDialog({
                 ) : (
                     <>
                         <div className='mcp-profile-header'>
-                            <PlayerAvatar name={player.name} />
+                            <PlayerAvatar name={player.name} skinUrl={skin?.url} offline={offline} />
                             <div>
                                 <strong>{player.name}</strong>
                                 <p>Minecraft Java player</p>
@@ -219,26 +228,42 @@ export default function PlayerDialog({
                         )}
                         {tab === 'profile' ? (
                             <div id='mcp-profile-panel' role='tabpanel' aria-labelledby='mcp-profile-tab'>
-                                <div className='mcp-profile-render'>
-                                    {identity.data && !renderFailed ? (
-                                        <img
-                                            src={nitroImage(identity.data.id, true)}
-                                            alt={`${player.name}'s Minecraft skin`}
-                                            referrerPolicy='no-referrer'
-                                            onError={() => setRenderFailed(true)}
-                                        />
-                                    ) : (
-                                        <span>{identity.isLoading ? 'Loading skin…' : 'Skin render unavailable'}</span>
-                                    )}
-                                </div>
-                                <p className='mcp-nitro-credit'>
-                                    Skins and profiles by{' '}
-                                    <a href={NITROCRAFT} target='_blank' rel='noreferrer'>
-                                        Nitrocraft
-                                    </a>
-                                    .
-                                </p>
-                                {identity.data && <p className='mcp-player-uuid'>Skin UUID: {identity.data.id}</p>}
+                                {offline ? (
+                                    <SkinPanel
+                                        uuid={uuid}
+                                        name={player.name}
+                                        skin={skin}
+                                        canEdit={capabilities.moderate}
+                                        onChanged={onSkinChanged}
+                                    />
+                                ) : (
+                                    <>
+                                        <div className='mcp-profile-render'>
+                                            {identity.data && !renderFailed ? (
+                                                <img
+                                                    src={nitroImage(identity.data.id, true)}
+                                                    alt={`${player.name}'s Minecraft skin`}
+                                                    referrerPolicy='no-referrer'
+                                                    onError={() => setRenderFailed(true)}
+                                                />
+                                            ) : (
+                                                <span>
+                                                    {identity.isLoading ? 'Loading skin…' : 'Skin render unavailable'}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className='mcp-nitro-credit'>
+                                            Skins and profiles by{' '}
+                                            <a href={NITROCRAFT} target='_blank' rel='noreferrer'>
+                                                Nitrocraft
+                                            </a>
+                                            .
+                                        </p>
+                                        {identity.data && (
+                                            <p className='mcp-player-uuid'>Skin UUID: {identity.data.id}</p>
+                                        )}
+                                    </>
+                                )}
                                 {capabilities.moderate && (
                                     <>
                                         <h3 className='mcp-tools-title'>

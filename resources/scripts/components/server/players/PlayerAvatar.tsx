@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { nitroImage } from '@/api/server/players';
 
+import SkinFace from './SkinFace';
 import useNitroIdentity from './useNitroIdentity';
 
 export function PixelAvatar({ name }: { name: string }) {
@@ -18,7 +19,17 @@ export function PixelAvatar({ name }: { name: string }) {
     );
 }
 
-export default function PlayerAvatar({ name }: { name: string }) {
+export default function PlayerAvatar({
+    name,
+    skinUrl,
+    offline = false,
+}: {
+    name: string;
+    /** Panel-uploaded skin; drawn locally. */
+    skinUrl?: string;
+    /** Offline-mode servers: names are not Mojang accounts, so skip the Nitrocraft lookup. */
+    offline?: boolean;
+}) {
     const ref = useRef<HTMLSpanElement>(null);
     const [visible, setVisible] = useState(false);
     const [failed, setFailed] = useState(false);
@@ -39,7 +50,15 @@ export default function PlayerAvatar({ name }: { name: string }) {
         if (ref.current) observer.observe(ref.current);
         return () => observer.disconnect();
     }, []);
-    const identity = useNitroIdentity(name, visible);
+    const identity = useNitroIdentity(name, visible && !offline && !skinUrl);
+    if (skinUrl) {
+        return (
+            <span ref={ref} className='mcp-avatar-wrap'>
+                <PixelAvatar name={name} />
+                <SkinFace url={skinUrl} />
+            </span>
+        );
+    }
     return (
         <span ref={ref} className='mcp-avatar-wrap'>
             <PixelAvatar name={name} />

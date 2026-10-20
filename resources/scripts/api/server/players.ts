@@ -21,7 +21,23 @@ export interface PlayerList {
     maximum: number | null;
     players: Player[];
     checked_at: string | null;
+    online_mode?: boolean | null;
     capabilities?: PlayerCapabilities;
+    skins?: Record<string, PlayerSkin>;
+}
+
+export interface PlayerSkin {
+    name: string;
+    url: string;
+    variant: 'classic' | 'slim';
+    updated_at: string;
+}
+
+export interface SkinResult {
+    applied: boolean;
+    provider: 'skinrestorer' | 'skinsrestorer' | null;
+    message: string;
+    url?: string;
 }
 
 export type PlayerAction = 'kick' | 'ban' | 'pardon' | 'op' | 'deop' | 'whitelist_add' | 'whitelist_remove';
@@ -71,6 +87,31 @@ export const getInventory = async (uuid: string, player: Player): Promise<Invent
         `/api/client/servers/${uuid}/players/${encodeURIComponent(player.name)}/inventory`,
         { params: player.uuid ? { uuid: player.uuid } : undefined },
     );
+    return data.attributes;
+};
+
+const skinPath = (uuid: string, name: string) => `/api/client/servers/${uuid}/players/${encodeURIComponent(name)}/skin`;
+
+export const uploadSkin = async (
+    uuid: string,
+    name: string,
+    file: File,
+    variant: 'classic' | 'slim',
+): Promise<SkinResult> => {
+    const form = new FormData();
+    form.append('skin', file);
+    form.append('variant', variant);
+    const { data } = await http.post<{ attributes: SkinResult }>(skinPath(uuid, name), form);
+    return data.attributes;
+};
+
+export const applySkin = async (uuid: string, name: string): Promise<SkinResult> => {
+    const { data } = await http.post<{ attributes: SkinResult }>(`${skinPath(uuid, name)}/apply`);
+    return data.attributes;
+};
+
+export const deleteSkin = async (uuid: string, name: string): Promise<SkinResult> => {
+    const { data } = await http.delete<{ attributes: SkinResult }>(skinPath(uuid, name));
     return data.attributes;
 };
 

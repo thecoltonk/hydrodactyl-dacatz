@@ -149,6 +149,15 @@ Route::group([
             ->where('player', '[A-Za-z0-9_]{1,16}')
             ->middleware('throttle:12,1,mc-players-inventory')
             ->name('api.client.servers.players.inventory');
+        Route::post('/{player}/skin', [MinecraftPlayersController::class, 'uploadSkin'])
+            ->where('player', '[A-Za-z0-9_]{1,16}')
+            ->middleware('throttle:10,1,mc-players-skins');
+        Route::post('/{player}/skin/apply', [MinecraftPlayersController::class, 'applySkin'])
+            ->where('player', '[A-Za-z0-9_]{1,16}')
+            ->middleware('throttle:10,1,mc-players-skins');
+        Route::delete('/{player}/skin', [MinecraftPlayersController::class, 'deleteSkin'])
+            ->where('player', '[A-Za-z0-9_]{1,16}')
+            ->middleware('throttle:10,1,mc-players-skins');
     });
 });
 

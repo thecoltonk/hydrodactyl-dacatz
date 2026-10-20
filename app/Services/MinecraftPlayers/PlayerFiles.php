@@ -59,6 +59,29 @@ class PlayerFiles
     /**
      * @throws DaemonConnectionException
      */
+    public function write(Server $server, string $path, string $content): void
+    {
+        $this->files($server)->putContent($path, $content);
+    }
+
+    /**
+     * File names in a directory, or [] when it does not exist.
+     */
+    public function names(Server $server, string $path): array
+    {
+        try {
+            return array_values(array_filter(array_map(
+                fn ($entry) => is_array($entry) ? ($entry['name'] ?? null) : null,
+                $this->directory($server, $path),
+            ), 'is_string'));
+        } catch (DaemonConnectionException) {
+            return [];
+        }
+    }
+
+    /**
+     * @throws DaemonConnectionException
+     */
     public function directory(Server $server, string $path): array
     {
         return $this->files($server)->getDirectory($path);

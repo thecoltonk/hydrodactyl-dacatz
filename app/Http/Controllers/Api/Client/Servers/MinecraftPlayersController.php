@@ -19,7 +19,12 @@ use Pterodactyl\Http\Requests\Api\Client\Servers\MinecraftPlayers\PlayerActionRe
 use Pterodactyl\Models\Permission;
 use Pterodactyl\Models\Server;
 use Pterodactyl\Models\User;
+use Pterodactyl\Http\Requests\Api\Client\Servers\MinecraftPlayers\SkinRequest;
+use Pterodactyl\Http\Requests\Api\Client\Servers\MinecraftPlayers\UploadSkinRequest;
 use Pterodactyl\Services\MinecraftPlayers\InventoryService;
+use Pterodactyl\Services\MinecraftPlayers\OfflineModeSupport;
+use Pterodactyl\Services\MinecraftPlayers\SkinCommands;
+use Pterodactyl\Services\MinecraftPlayers\SkinStore;
 use Pterodactyl\Services\MinecraftPlayers\PlayerCommand;
 use Pterodactyl\Services\MinecraftPlayers\PlayerFiles;
 use Pterodactyl\Services\MinecraftPlayers\PlayerTarget;
@@ -55,9 +60,13 @@ class MinecraftPlayersController extends ClientApiController
                     // Recheck after acquiring the lock to avoid duplicate queries.
                     $result = Cache::get($key);
                     if ($result === null) {
-                        $target = $this->targets->resolve($server, $this->properties($server));
+                        $properties = $this->properties($server);
+                        $target = $this->targets->resolve($server, $properties);
                         $result = $target === null ? ServerQuery::unavailable() : $this->query->players($target);
                         $result['checked_at'] = now()->toIso8601String();
+                        $result['online_mode'] = $properties === null
+                            ? null
+                            : $this->targets->property($properties, 'online-mode') !== 'false';
                         Cache::put($key, $result, 10);
                     }
                 } finally {
@@ -69,7 +78,10 @@ class MinecraftPlayersController extends ClientApiController
         }
 
         // Capabilities belong to the requesting user, never the shared cache.
-        return ['object' => 'minecraft_player_list', 'attributes' => $result + ['capabilities' => $capabilities]];
+        return ['object' => 'minecraft_player_list', 'attributes' => $result + [
+            'capabilities' => $capabilities,
+            'skins' => (object) app(SkinStore::class)->all($server),
+        ]];
     }
 
     /**
@@ -79,7 +91,15 @@ class MinecraftPlayersController extends ClientApiController
     {
         $data = $request->validated();
         $command = $commands->build($data['player'], $data['action'], $data['reason'] ?? null);
-        $this->files->command($server, $command);
+
+        $offline = app(OfflineModeSupport::class);
+        if (str_starts_with($data['action'], 'whitelist_') && $offline->isOffline($server)) {
+            // Offline mode: write the exact-case offline UUID ourselves (see OfflineModeSupport).
+            $offline->whitelist($server, $data['player'], $data['action'] === 'whitelist_add');
+            $command = 'whitelist.json ' . ($data['action'] === 'whitelist_add' ? 'add ' : 'remove ') . $data['player'];
+        } else {
+            $this->files->command($server, $command);
+        }
 
         Activity::event('server:console.command')
             ->property('command', $command)
@@ -89,6 +109,42 @@ class MinecraftPlayersController extends ClientApiController
 
         // The daemon acknowledges submission; Minecraft's console reports the result.
         return ['object' => 'minecraft_player_action', 'attributes' => ['status' => 'submitted', 'action' => $data['action'], 'player' => $data['player']]];
+    }
+
+    /**
+     * Upload a custom skin for a player (offline-mode servers) and apply it in game.
+     */
+    public function uploadSkin(UploadSkinRequest $request, Server $server, SkinStore $skins, SkinCommands $commands): array
+    {
+        $data = $request->validated();
+        $url = $skins->put($server, $data['player'], (string) $request->file('skin')->get(), $data['variant']);
+        $result = $commands->apply($server, $data['player'], $url, $data['variant']);
+
+        Activity::event('server:players.skin-uploaded')->property(['player' => $data['player'], 'variant' => $data['variant']])->log();
+
+        return ['object' => 'minecraft_player_skin', 'attributes' => $result + ['url' => $url, 'variant' => $data['variant']]];
+    }
+
+    /**
+     * Re-send a stored skin to the server (e.g. once the player is online).
+     */
+    public function applySkin(SkinRequest $request, Server $server, SkinStore $skins, SkinCommands $commands): array
+    {
+        $player = $request->validated()['player'];
+        $skin = $skins->find($server, $player);
+        if ($skin === null) {
+            throw new \Symfony\Component\HttpKernel\Exception\HttpException(404, 'No custom skin is stored for this player.');
+        }
+
+        return ['object' => 'minecraft_player_skin', 'attributes' => $commands->apply($server, $skin['name'], $skin['url'], $skin['variant']) + $skin];
+    }
+
+    public function deleteSkin(SkinRequest $request, Server $server, SkinStore $skins, SkinCommands $commands): array
+    {
+        $player = $request->validated()['player'];
+        $skins->forget($server, $player);
+
+        return ['object' => 'minecraft_player_skin', 'attributes' => $commands->clear($server, $player)];
     }
 
     /**

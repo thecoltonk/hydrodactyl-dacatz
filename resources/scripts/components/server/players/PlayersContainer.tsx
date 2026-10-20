@@ -80,6 +80,7 @@ const PlayersContainer = () => {
     const unsupported = data?.status === 'unsupported';
     const busy = query.isValidating;
     const players = data?.players ?? [];
+    const offline = data?.online_mode === false;
     const filtered = players.filter((player) => player.name.toLowerCase().includes(search.trim().toLowerCase()));
     const copy = async (value: string, description: string) => {
         try {
@@ -176,6 +177,19 @@ const PlayersContainer = () => {
                                         : 'Waiting for response'}
                                 </small>
                             </strong>
+                        </div>
+                    </div>
+                )}
+
+                {offline && (
+                    <div className='mcp-alert' role='status'>
+                        {icon(CircleInfo, 19)}
+                        <div>
+                            <strong>Offline mode is on.</strong>
+                            <p>
+                                Whitelisting from here uses the exact-case offline UUID, so it works for names without a
+                                Mojang account. Upload custom skins from each player's profile.
+                            </p>
                         </div>
                     </div>
                 )}
@@ -317,7 +331,11 @@ const PlayersContainer = () => {
                         <ul className='mcp-player-grid'>
                             {filtered.map((player) => (
                                 <li className='mcp-player' key={player.name.toLowerCase()}>
-                                    <PlayerAvatar name={player.name} />
+                                    <PlayerAvatar
+                                        name={player.name}
+                                        skinUrl={data?.skins?.[player.name.toLowerCase()]?.url}
+                                        offline={offline}
+                                    />
                                     <div className='mcp-player-info'>
                                         <strong>{player.name}</strong>
                                         <span>{isError ? 'Last reported' : 'Reported online'}</span>
@@ -386,6 +404,9 @@ const PlayersContainer = () => {
                         capabilities={capabilities}
                         onClose={() => setSelectedPlayer(null)}
                         onNotice={setNotice}
+                        offline={offline}
+                        skin={data?.skins?.[selectedPlayer.name.toLowerCase()]}
+                        onSkinChanged={() => void query.mutate()}
                     />
                 )}
 
