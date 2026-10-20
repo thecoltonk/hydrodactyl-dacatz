@@ -18,6 +18,7 @@ import {
     installModpack,
     type ModpackHit,
     type ModpackLoader,
+    type ModpackSource,
     searchModpacks,
 } from '@/api/server/modpacks';
 import { Dialog } from '@/components/elements/dialog';
@@ -47,18 +48,24 @@ const Spin = ({ size = 16 }: { size?: number }) => (
 
 function InstallDialog({
     uuid,
+    source,
     pack,
     onClose,
     onStarted,
 }: {
     uuid: string;
+    source: ModpackSource;
     pack: ModpackHit;
     onClose: () => void;
     onStarted: () => void;
 }) {
-    const versions = useSWR(['modpacks:versions', uuid, pack.id], () => getModpackVersions(uuid, pack.id), {
-        revalidateOnFocus: false,
-    });
+    const versions = useSWR(
+        ['modpacks:versions', uuid, source, pack.id],
+        () => getModpackVersions(uuid, source, pack.id),
+        {
+            revalidateOnFocus: false,
+        },
+    );
     const [selected, setSelected] = useState<string | null>(null);
     const [confirmed, setConfirmed] = useState(false);
     const [busy, setBusy] = useState(false);
@@ -71,7 +78,7 @@ function InstallDialog({
         setBusy(true);
         setError('');
         try {
-            await installModpack(uuid, versionId);
+            await installModpack(uuid, source, pack.id, versionId);
             onStarted();
         } catch (failure) {
             setError(httpErrorToHuman(failure as Error));
@@ -122,6 +129,7 @@ function InstallDialog({
                                     {version.loaders.map((loader) => LOADER_LABEL[loader] ?? loader).join(', ')} ·{' '}
                                     {version.game_versions.at(-1) ?? '?'}
                                     {version.type !== 'release' ? ` · ${version.type}` : ''}
+                                    {version.server_pack ? ' · server pack' : ''}
                                 </span>
                             </label>
                         ))}
@@ -179,19 +187,20 @@ const ModpacksContainer = () => {
     const [query, setQuery] = useState('');
     const [debounced] = useDebounce(query.trim(), 400);
     const [loader, setLoader] = useState<ModpackLoader | null>(null);
+    const [source, setSource] = useState<ModpackSource>('modrinth');
     const [pages, setPages] = useState(1);
     const [selected, setSelected] = useState<ModpackHit | null>(null);
 
     // biome-ignore lint/correctness/useExhaustiveDependencies: reset paging when the search changes
-    useEffect(() => setPages(1), [debounced, loader]);
+    useEffect(() => setPages(1), [debounced, loader, source]);
 
     const results = useSWR<{ hits: ModpackHit[]; total: number }, AxiosError>(
-        ['modpacks:search', uuid, debounced, loader, pages],
+        ['modpacks:search', uuid, source, debounced, loader, pages],
         async () => {
             const all: ModpackHit[] = [];
             let total = 0;
             for (let page = 0; page < pages; page++) {
-                const result = await searchModpacks(uuid, debounced, loader, page * 20);
+                const result = await searchModpacks(uuid, source, debounced, loader, page * 20);
                 all.push(...result.hits);
                 total = result.total;
             }
@@ -215,8 +224,8 @@ const ModpacksContainer = () => {
             <div className='w-full h-full min-h-full flex-1 flex flex-col px-2 sm:px-0'>
                 <MainPageHeader direction='column' title={'Modpacks'}>
                     <p className='text-sm text-mocha-50'>
-                        One-click Modrinth modpacks. Installing sets up the right loader, Minecraft version and Java for
-                        you.
+                        One-click modpacks from Modrinth or CurseForge. Installing sets up the right loader, Minecraft
+                        version and Java for you.
                     </p>
                 </MainPageHeader>
 
@@ -256,6 +265,29 @@ const ModpacksContainer = () => {
                     </div>
                 )}
 
+                <div className='mb-3 flex gap-1'>
+                    {(
+                        [
+                            ['modrinth', 'Modrinth'],
+                            ['curseforge', 'CurseForge'],
+                        ] as const
+                    ).map(([key, label]) => (
+                        <button
+                            key={key}
+                            type='button'
+                            aria-pressed={source === key}
+                            onClick={() => setSource(key)}
+                            className={`rounded-xl border px-4 py-2 text-sm font-medium transition ${
+                                source === key
+                                    ? 'border-cream-400 bg-cream-400 text-mocha-500'
+                                    : 'border-mocha-300 hover:bg-mocha-400'
+                            }`}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
+
                 <div className='mb-4 flex flex-col gap-3 sm:flex-row sm:items-center'>
                     <label
                         htmlFor='modpack-search'
@@ -294,7 +326,7 @@ const ModpacksContainer = () => {
                     <p className='text-sm text-red-400'>{httpErrorToHuman(results.error)}</p>
                 ) : results.isLoading && !hits.length ? (
                     <div className='flex items-center gap-2 py-10 text-mocha-50'>
-                        <Spin /> Searching Modrinth…
+                        <Spin /> Searching {source === 'curseforge' ? 'CurseForge' : 'Modrinth'}…
                     </div>
                 ) : !hits.length ? (
                     <p className='py-10 text-center text-mocha-50'>No server-compatible modpacks found.</p>
@@ -359,17 +391,16 @@ const ModpacksContainer = () => {
                 )}
 
                 <p className='mt-6 text-xs text-mocha-50'>
-                    Modpacks from{' '}
-                    <a href='https://modrinth.com/modpacks' target='_blank' rel='noreferrer' className='underline'>
-                        Modrinth
-                    </a>
-                    . Client-only mods (shaders, minimaps and similar) are skipped automatically.
+                    Modpacks from Modrinth and CurseForge. Client-only content is skipped automatically, and CurseForge
+                    packs use the author's server pack when one exists. Some CurseForge mods block third-party
+                    downloads; those are listed after install so you can add them by hand.
                 </p>
 
                 {selected && (
                     <InstallDialog
                         key={selected.id}
                         uuid={uuid}
+                        source={source}
                         pack={selected}
                         onClose={() => setSelected(null)}
                         onStarted={() => {

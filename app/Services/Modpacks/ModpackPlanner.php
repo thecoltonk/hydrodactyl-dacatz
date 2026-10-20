@@ -5,7 +5,7 @@ namespace Pterodactyl\Services\Modpacks;
 use Pterodactyl\Models\Egg;
 
 /**
- * Turns a Modrinth modpack version into a concrete install plan: which loader
+ * Turns a Modrinth or CurseForge modpack version into a concrete install plan: which loader
  * egg to switch to, the egg variables and Java image to use, and the exact list
  * of server-side files to download. Everything is validated here, before any
  * server files are touched.
@@ -19,21 +19,38 @@ class ModpackPlanner
     /** Preferred egg names per loader (falls back to any egg with the feature). */
     private const EGG_NAMES = ['fabric' => 'Fabric', 'quilt' => 'Quilt', 'forge' => 'Forge Minecraft', 'neoforge' => 'Neoforge'];
 
-    public function __construct(private ModrinthModpacks $modrinth)
+    public function __construct(private ModrinthModpacks $modrinth, private CurseForgeModpacks $curseforge)
     {
     }
 
-    public function plan(string $versionId): array
+    public function plan(string $source, ?string $projectId, string $versionId): array
     {
+        if ($source === 'curseforge') {
+            if ($projectId === null) {
+                throw new ModpackException('A CurseForge project is required.');
+            }
+            $pack = $this->curseforge->resolve($projectId, $versionId);
+
+            return $this->loaderPlan($pack['minecraft'], $pack['loader'], $pack['loader_version']) + $pack + [
+                'source' => 'curseforge',
+                'version_id' => $versionId,
+                'project_id' => $projectId,
+            ];
+        }
+
         $version = $this->modrinth->version($versionId);
         $index = $this->modrinth->index($version['url']);
 
         return $this->fromIndex($index) + [
+            'source' => 'modrinth',
             'version_id' => $versionId,
             'project_id' => $version['project_id'],
             'title' => $version['title'],
             'version_name' => $version['name'],
-            'pack_url' => $version['url'],
+            'archive_url' => $version['url'],
+            'override_dirs' => ['overrides', 'server-overrides'],
+            'server_pack' => false,
+            'skipped' => [],
         ];
     }
 
@@ -56,7 +73,24 @@ class ModpackPlanner
         }
         $loader = ModrinthModpacks::LOADERS[$found[0]];
         $loaderVersion = $dependencies[$found[0]];
-        if (!is_string($loaderVersion) || !preg_match('/\A[0-9A-Za-z][0-9A-Za-z.\-+_]{0,63}\z/', $loaderVersion)) {
+
+        return $this->loaderPlan($minecraft, $loader, is_string($loaderVersion) ? $loaderVersion : '') + [
+            'files' => $this->files($index),
+        ];
+    }
+
+    /**
+     * Egg, Java image and egg variables for a Minecraft + loader combination.
+     */
+    public function loaderPlan(string $minecraft, string $loader, string $loaderVersion): array
+    {
+        if (!preg_match('/\A[0-9A-Za-z][0-9A-Za-z.\-_]{0,31}\z/', $minecraft)) {
+            throw new ModpackException('The modpack does not declare a valid Minecraft version.');
+        }
+        if (!in_array($loader, ModrinthModpacks::LOADERS, true)) {
+            throw new ModpackException('This modpack needs a loader this panel cannot install (supported: Fabric, Quilt, Forge, NeoForge).');
+        }
+        if (!preg_match('/\A[0-9A-Za-z][0-9A-Za-z.\-+_]{0,63}\z/', $loaderVersion)) {
             throw new ModpackException('The modpack declares an invalid loader version.');
         }
 
@@ -71,7 +105,6 @@ class ModpackPlanner
             'egg_name' => $egg->name,
             'docker_image' => $this->dockerImage($egg, $minecraft),
             'environment' => $this->environment($egg, $loader, $minecraft, $loaderVersion),
-            'files' => $this->files($index),
         ];
     }
 

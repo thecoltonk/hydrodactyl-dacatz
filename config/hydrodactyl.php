@@ -32,6 +32,14 @@ return [
     |
     */
 
+    /*
+    | One-click modpack installs. CurseForge requires a (free) API key from
+    | https://console.curseforge.com; Modrinth needs nothing.
+    */
+    'modpacks' => [
+        'curseforge_api_key' => env('CURSEFORGE_API_KEY'),
+    ],
+
     'marketplace' => [
         'timeout' => (int) env('MARKETPLACE_TIMEOUT', 15),
         'cache_ttl' => (int) env('MARKETPLACE_CACHE_TTL', 120),

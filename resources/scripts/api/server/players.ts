@@ -101,7 +101,10 @@ export const uploadSkin = async (
     const form = new FormData();
     form.append('skin', file);
     form.append('variant', variant);
-    const { data } = await http.post<{ attributes: SkinResult }>(skinPath(uuid, name), form);
+    const { data } = await http.post<{ attributes: SkinResult }>(skinPath(uuid, name), form, {
+        // The client defaults to JSON, which would serialize away the file.
+        headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return data.attributes;
 };
 

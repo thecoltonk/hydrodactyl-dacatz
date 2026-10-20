@@ -10,6 +10,7 @@ use Pterodactyl\Http\Requests\Api\Client\Servers\Modpacks\InstallModpackRequest;
 use Pterodactyl\Jobs\Server\InstallModpackJob;
 use Pterodactyl\Models\Server;
 use Pterodactyl\Models\ServerOperation;
+use Pterodactyl\Services\Modpacks\CurseForgeModpacks;
 use Pterodactyl\Services\Modpacks\ModpackPlanner;
 use Pterodactyl\Services\Modpacks\ModrinthModpacks;
 use Pterodactyl\Services\ServerOperations\ServerOperationService;
@@ -22,6 +23,7 @@ class ModpacksController extends ClientApiController
 {
     public function __construct(
         private ModrinthModpacks $modrinth,
+        private CurseForgeModpacks $curseforge,
         private ModpackPlanner $planner,
         private ServerOperationService $operations,
     ) {
@@ -30,7 +32,9 @@ class ModpacksController extends ClientApiController
 
     public function search(BrowseModpacksRequest $request): JsonResponse
     {
-        return new JsonResponse($this->modrinth->search(
+        $source = $request->input('source') === 'curseforge' ? $this->curseforge : $this->modrinth;
+
+        return new JsonResponse($source->search(
             (string) $request->input('query', ''),
             (int) $request->input('offset', 0),
             $request->input('loader'),
@@ -41,17 +45,24 @@ class ModpacksController extends ClientApiController
     {
         $request->validate(['project_id' => 'required']);
 
-        return new JsonResponse(['versions' => $this->modrinth->versions((string) $request->input('project_id'))]);
+        $source = $request->input('source') === 'curseforge' ? $this->curseforge : $this->modrinth;
+
+        return new JsonResponse(['versions' => $source->versions((string) $request->input('project_id'))]);
     }
 
     public function install(InstallModpackRequest $request, Server $server): JsonResponse
     {
         // Plan (download + validate the index) before touching anything on the server.
-        $plan = $this->planner->plan($request->input('version_id'));
+        $plan = $this->planner->plan(
+            (string) ($request->input('source') ?: 'modrinth'),
+            $request->input('project_id'),
+            (string) $request->input('version_id'),
+        );
 
         $operation = $this->operations->createOperation($server, $request->user(), 'modpack_install', [
             'project_id' => $plan['project_id'],
             'version_id' => $plan['version_id'],
+            'source' => $plan['source'],
             'title' => $plan['title'],
             'version_name' => $plan['version_name'],
             'loader' => $plan['loader'],
@@ -72,6 +83,8 @@ class ModpacksController extends ClientApiController
             'loader_version' => $plan['loader_version'],
             'minecraft' => $plan['minecraft'],
             'files' => count($plan['files']),
+            'server_pack' => $plan['server_pack'],
+            'skipped' => $plan['skipped'],
         ], JsonResponse::HTTP_ACCEPTED);
     }
 

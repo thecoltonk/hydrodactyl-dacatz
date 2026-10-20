@@ -15,6 +15,7 @@ class BrowseModpacksRequest extends ClientApiRequest
     public function rules(): array
     {
         return [
+            'source' => 'nullable|string|in:modrinth,curseforge',
             'query' => 'nullable|string|max:100',
             'offset' => 'nullable|integer|min:0|max:1000',
             'loader' => 'nullable|string|in:fabric,quilt,forge,neoforge',

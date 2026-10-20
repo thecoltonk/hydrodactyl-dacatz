@@ -23,6 +23,8 @@ class InstallModpackRequest extends BrowseModpacksRequest
     public function rules(): array
     {
         return [
+            'source' => 'nullable|string|in:modrinth,curseforge',
+            'project_id' => 'nullable|required_if:source,curseforge|string|regex:/\A[A-Za-z0-9]{1,64}\z/',
             'version_id' => 'required|string|regex:/\A[A-Za-z0-9]{1,64}\z/',
             'confirm_wipe' => 'required|accepted',
         ];

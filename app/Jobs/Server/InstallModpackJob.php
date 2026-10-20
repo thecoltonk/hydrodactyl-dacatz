@@ -92,7 +92,11 @@ class InstallModpackJob extends Job implements ShouldQueue
 
             $operation->updateProgress('Downloading the modpack archive...');
             $daemon->mkdir($server, self::WORK);
-            $daemon->pull($server, $this->plan['pack_url'], '/' . self::WORK, 'pack.zip');
+            $serverPack = (bool) ($this->plan['server_pack'] ?? false);
+            if ($serverPack) {
+                $operation->updateProgress('Downloading the server pack (this can take a few minutes)...');
+            }
+            $daemon->pull($server, $this->plan['archive_url'] ?? $this->plan['pack_url'], '/' . self::WORK, 'pack.zip');
             $daemon->decompress($server, '/' . self::WORK, 'pack.zip');
 
             $files = $this->plan['files'];
@@ -114,7 +118,10 @@ class InstallModpackJob extends Job implements ShouldQueue
             }
 
             $operation->updateProgress('Applying configs and overrides...');
-            foreach (['overrides', 'server-overrides'] as $folder) {
+            if ($serverPack) {
+                $this->merge($daemon, $server, $this->serverPackRoot($daemon, $server), '', 0, true);
+            }
+            foreach ((array) ($this->plan['override_dirs'] ?? ['overrides', 'server-overrides']) as $folder) {
                 $this->merge($daemon, $server, self::WORK . '/' . $folder, '', 0);
             }
             $daemon->delete($server, '/', [self::WORK]);
@@ -124,7 +131,16 @@ class InstallModpackJob extends Job implements ShouldQueue
                 ->property(['modpack' => $label, 'project_id' => $this->plan['project_id'], 'version_id' => $this->plan['version_id']])
                 ->log();
 
-            $operation->markAsCompleted(sprintf('%s installed (%d files). Start the server to accept the EULA and play.', $label, $total));
+            $skipped = array_values(array_filter((array) ($this->plan['skipped'] ?? []), 'is_string'));
+            $message = sprintf('%s installed%s. Start the server to accept the EULA and play.', $label, $serverPack ? ' from its server pack' : sprintf(' (%d files)', $total));
+            if ($skipped !== []) {
+                $message .= sprintf(
+                    ' %d mod(s) block third-party downloads and must be added to /mods manually: %s.',
+                    count($skipped),
+                    implode(', ', array_slice($skipped, 0, 25)) . (count($skipped) > 25 ? ', ...' : ''),
+                );
+            }
+            $operation->markAsCompleted($message);
         } catch (\Throwable $exception) {
             Log::error('Modpack install failed', ['server_id' => $this->server->id, 'error' => $exception->getMessage()]);
             $operation->markAsFailed('Modpack install failed: ' . $exception->getMessage());
@@ -157,10 +173,31 @@ class InstallModpackJob extends Job implements ShouldQueue
     }
 
     /**
+     * Server packs are often wrapped in a single top-level folder.
+     */
+    private function serverPackRoot(ModpackDaemon $daemon, Server $server): string
+    {
+        $root = self::WORK;
+        for ($i = 0; $i < 2; $i++) {
+            $entries = array_values(array_filter($daemon->list($server, '/' . $root), fn ($entry) => ($entry['name'] ?? '') !== 'pack.zip'));
+            $names = array_column($entries, 'name');
+            if (in_array('mods', $names, true) || count($entries) !== 1 || !($entries[0]['directory'] ?? false)) {
+                break;
+            }
+            $root .= '/' . $entries[0]['name'];
+        }
+
+        return $root;
+    }
+
+    /**
      * Move everything under $source into $target, replacing conflicting files
      * and recursing into folders that exist on both sides.
+     *
+     * For server packs, top-level launchers/jars/libraries are skipped so the
+     * loader installed by the egg (with the pack's exact version) is kept.
      */
-    private function merge(ModpackDaemon $daemon, Server $server, string $source, string $target, int $depth): void
+    private function merge(ModpackDaemon $daemon, Server $server, string $source, string $target, int $depth, bool $serverPack = false): void
     {
         if ($depth > 16) {
             return;
@@ -182,6 +219,10 @@ class InstallModpackJob extends Job implements ShouldQueue
         foreach ($entries as $entry) {
             $name = (string) ($entry['name'] ?? '');
             if ($name === '' || $name === '.' || $name === '..') {
+                continue;
+            }
+            if ($serverPack && $depth === 0 && ($name === 'pack.zip' || $name === 'libraries' || $name === 'eula.txt'
+                || preg_match('/\.(jar|sh|bat|cmd|ps1)$/i', $name))) {
                 continue;
             }
             $from = $source . '/' . $name;
