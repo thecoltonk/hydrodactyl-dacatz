@@ -25,6 +25,7 @@ use Pterodactyl\Services\MinecraftPlayers\InventoryService;
 use Pterodactyl\Services\MinecraftPlayers\OfflineModeSupport;
 use Pterodactyl\Services\MinecraftPlayers\SkinCommands;
 use Pterodactyl\Services\MinecraftPlayers\SkinStore;
+use Pterodactyl\Services\MinecraftPlayers\StatsSnapshot;
 use Pterodactyl\Services\MinecraftPlayers\PlayerCommand;
 use Pterodactyl\Services\MinecraftPlayers\PlayerFiles;
 use Pterodactyl\Services\MinecraftPlayers\PlayerTarget;
@@ -90,7 +91,11 @@ class MinecraftPlayersController extends ClientApiController
     public function action(PlayerActionRequest $request, Server $server, PlayerCommand $commands): array
     {
         $data = $request->validated();
-        $command = $commands->build($data['player'], $data['action'], $data['reason'] ?? null);
+        try {
+            $command = $commands->build($data['player'], $data['action'], $data['reason'] ?? null, $data);
+        } catch (\InvalidArgumentException $exception) {
+            throw new \Symfony\Component\HttpKernel\Exception\HttpException(422, $exception->getMessage());
+        }
 
         $offline = app(OfflineModeSupport::class);
         if (str_starts_with($data['action'], 'whitelist_') && $offline->isOffline($server)) {
@@ -153,8 +158,42 @@ class MinecraftPlayersController extends ClientApiController
     public function inventory(GetInventoryRequest $request, Server $server, InventoryService $inventories): array
     {
         $data = $request->validated();
+        $this->saveFirst($request, $server);
 
         return ['object' => 'minecraft_inventory_snapshot', 'attributes' => $inventories->read($server, $data['player'], $data['uuid'] ?? null)];
+    }
+
+    /**
+     * Player statistics (playtime, kills, distance, blocks mined...).
+     */
+    public function stats(GetInventoryRequest $request, Server $server, InventoryService $inventories, StatsSnapshot $snapshots): array
+    {
+        $data = $request->validated();
+        $this->saveFirst($request, $server);
+        $raw = $inventories->stats($server, $data['player'], $data['uuid'] ?? null);
+
+        return ['object' => 'minecraft_player_stats', 'attributes' => [
+            'player' => $raw['player'],
+            'uuid' => $raw['uuid'],
+            'read_at' => now()->toIso8601String(),
+        ] + $snapshots->summarize($raw['stats'])];
+    }
+
+    /**
+     * Optionally flush the running server's player data to disk first, so the
+     * snapshot is current. Silently skipped when the server is offline.
+     */
+    private function saveFirst(GetInventoryRequest $request, Server $server): void
+    {
+        if (!$request->boolean('save')) {
+            return;
+        }
+        try {
+            $this->files->command($server, 'save-all');
+            sleep(2);
+        } catch (DaemonConnectionException) {
+            // Offline: files on disk are already the latest.
+        }
     }
 
     private function capabilities(User $user, Server $server): array

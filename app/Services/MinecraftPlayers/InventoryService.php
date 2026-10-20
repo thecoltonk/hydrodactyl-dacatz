@@ -18,7 +18,12 @@ class InventoryService
     {
     }
 
-    public function read(Server $server, string $name, ?string $knownUuid = null): array
+    /**
+     * Resolve the world folder and the UUID the server uses for this player.
+     *
+     * @return array{name: string, uuid: string, world: string}
+     */
+    public function resolve(Server $server, string $name, ?string $knownUuid = null): array
     {
         if (!preg_match('/\A[A-Za-z0-9_]{1,16}\z/', $name)) {
             throw new HttpException(422, 'Enter a valid Minecraft Java username.');
@@ -36,6 +41,42 @@ class InventoryService
         }
         // Server identity takes priority over Mojang skin identity on offline-mode servers.
         $uuid ??= $this->uuid($knownUuid) ? strtolower($knownUuid) : $this->offlineUuid($name);
+
+        return ['name' => $name, 'uuid' => $uuid, 'world' => $world];
+    }
+
+    /**
+     * Raw world/stats/<uuid>.json for a player, or null when they have none yet.
+     */
+    public function stats(Server $server, string $name, ?string $knownUuid = null): array
+    {
+        ['name' => $name, 'uuid' => $uuid, 'world' => $world] = $this->resolve($server, $name, $knownUuid);
+        $raw = null;
+        foreach (['/stats/', '/players/stats/'] as $folder) {
+            try {
+                $raw = $this->files->read($server, '/' . $world . $folder . $uuid . '.json', 2097152);
+                break;
+            } catch (DaemonConnectionException $exception) {
+                if (!in_array($exception->getStatusCode(), [404, 500], true)) {
+                    throw $exception;
+                }
+            }
+        }
+        if ($raw === null) {
+            throw new HttpException(404, 'No saved stats were found. The player may not have joined yet.');
+        }
+        try {
+            $data = json_decode($raw, true, 16, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            throw new HttpException(422, 'The saved stats file is not valid JSON.');
+        }
+
+        return ['player' => $name, 'uuid' => $uuid, 'stats' => is_array($data['stats'] ?? null) ? $data['stats'] : []];
+    }
+
+    public function read(Server $server, string $name, ?string $knownUuid = null): array
+    {
+        ['name' => $name, 'uuid' => $uuid, 'world' => $world] = $this->resolve($server, $name, $knownUuid);
         $paths = [
             '/' . $world . '/playerdata/' . $uuid . '.dat',
             '/' . $world . '/players/data/' . $uuid . '.dat',

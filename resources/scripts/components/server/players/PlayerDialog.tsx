@@ -1,15 +1,27 @@
 // Ported from Aquadactyl/MCPlayersJava (BSD 2-Clause, Copyright (c) Aquadactyl contributors).
-import { ArrowsRotateRight, BookOpen, CrownDiamond, Person, Shield, TriangleExclamation } from '@gravity-ui/icons';
-import { useState } from 'react';
+import {
+    ArrowsRotateRight,
+    BookOpen,
+    ChartColumn,
+    CrownDiamond,
+    MapPin,
+    Person,
+    Shield,
+    TriangleExclamation,
+} from '@gravity-ui/icons';
+import { useRef, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 
 import { httpErrorToHuman } from '@/api/http';
 import {
+    type GameMode,
     getInventory,
+    getPlayerStats,
     NITROCRAFT,
     nitroImage,
     type Player,
     type PlayerAction,
+    type PlayerActionExtra,
     type PlayerCapabilities,
     type PlayerSkin,
     sendPlayerAction,
@@ -19,8 +31,10 @@ import { Input } from '@/components/elements/inputs';
 import { Button } from '@/components/ui/button';
 
 import InventoryView from './InventoryView';
+import LocationsPanel, { dimensionLabel, type TeleportTarget } from './LocationsPanel';
 import PlayerAvatar from './PlayerAvatar';
 import SkinPanel from './SkinPanel';
+import StatsPanel from './StatsPanel';
 import useNitroIdentity from './useNitroIdentity';
 
 export const actions: {
@@ -57,6 +71,15 @@ export const actions: {
     },
 ];
 
+const GAME_MODES: { mode: GameMode; label: string }[] = [
+    { mode: 'survival', label: 'Survival' },
+    { mode: 'creative', label: 'Creative' },
+    { mode: 'adventure', label: 'Adventure' },
+    { mode: 'spectator', label: 'Spectator' },
+];
+
+type Tab = 'profile' | 'locations' | 'stats' | 'inventory';
+
 const icon = (Icon: typeof Person, size = 15, className?: string) => (
     <Icon width={size} height={size} className={className} aria-hidden />
 );
@@ -81,7 +104,7 @@ export default function PlayerDialog({
     skin?: PlayerSkin;
     onSkinChanged?: () => void;
 }) {
-    const [tab, setTab] = useState<'profile' | 'inventory'>('profile');
+    const [tab, setTab] = useState<Tab>('profile');
     const [action, setAction] = useState<PlayerAction | null>(null);
     const [reason, setReason] = useState('');
     const [busy, setBusy] = useState(false);
@@ -90,13 +113,49 @@ export default function PlayerDialog({
     const [renderFailed, setRenderFailed] = useState(false);
     const { mutate } = useSWRConfig();
     const identity = useNitroIdentity(player.name, !offline);
+    // Set before a refresh to have the server flush player data first (save-all).
+    const saveNext = useRef(false);
+    const takeSave = () => {
+        const save = saveNext.current;
+        saveNext.current = false;
+        return save;
+    };
     const inventory = useSWR(
-        tab === 'inventory' && capabilities.inventory
-            ? ['minecraft-players:inventory', uuid, player.name, player.uuid]
-            : null,
-        () => getInventory(uuid, player),
+        capabilities.inventory ? ['minecraft-players:inventory', uuid, player.name, player.uuid] : null,
+        () => getInventory(uuid, player, takeSave()),
         { revalidateOnFocus: false, shouldRetryOnError: false, dedupingInterval: 10000 },
     );
+    const stats = useSWR(
+        tab === 'stats' && capabilities.inventory ? ['minecraft-players:stats', uuid, player.name, player.uuid] : null,
+        () => getPlayerStats(uuid, player, takeSave()),
+        { revalidateOnFocus: false, shouldRetryOnError: false, dedupingInterval: 10000 },
+    );
+    const saveAndRefresh = () => {
+        saveNext.current = capabilities.moderate;
+        void (tab === 'stats' ? stats.mutate() : inventory.mutate());
+    };
+
+    const quick = async (next: PlayerAction, extra: PlayerActionExtra, message: string) => {
+        if (busy) return;
+        setBusy(true);
+        setError('');
+        setSubmitted('');
+        try {
+            await sendPlayerAction(uuid, player.name, next, '', extra);
+            setSubmitted(message);
+            onNotice(message);
+        } catch (failure) {
+            setError(httpErrorToHuman(failure as Error));
+        } finally {
+            setBusy(false);
+        }
+    };
+    const teleport = (target: TeleportTarget, label: string) =>
+        void quick(
+            'teleport',
+            target,
+            `Teleporting ${player.name} to ${label} (${Math.round(target.x)}, ${Math.round(target.y)}, ${Math.round(target.z)}, ${dimensionLabel(target.dimension)}). They must be online.`,
+        );
     const definition = actions.find((entry) => entry.action === action);
 
     const submit = async (event: React.FormEvent) => {
@@ -123,7 +182,9 @@ export default function PlayerDialog({
         <Dialog
             open
             title={definition ? `${definition.label} ${player.name}` : player.name}
-            description={definition ? definition.description : 'Player profile, saved inventory and server actions.'}
+            description={
+                definition ? definition.description : 'Profile, locations, stats, inventory and server actions.'
+            }
             onClose={() => {
                 if (!busy) onClose();
             }}
@@ -192,35 +253,39 @@ export default function PlayerDialog({
                             </div>
                         </div>
                         <div className='mcp-dialog-tabs' role='tablist' aria-label='Player details'>
-                            <button
-                                type='button'
-                                role='tab'
-                                aria-selected={tab === 'profile'}
-                                aria-controls='mcp-profile-panel'
-                                id='mcp-profile-tab'
-                                onClick={() => setTab('profile')}
-                            >
-                                {icon(Person)}
-                                Profile & actions
-                            </button>
-                            <button
-                                type='button'
-                                role='tab'
-                                aria-selected={tab === 'inventory'}
-                                aria-controls='mcp-inventory-panel'
-                                id='mcp-inventory-tab'
-                                disabled={!capabilities.inventory}
-                                title={
-                                    !capabilities.inventory
-                                        ? 'Requires file read and file content permissions'
-                                        : undefined
-                                }
-                                onClick={() => setTab('inventory')}
-                            >
-                                {icon(BookOpen)}
-                                Saved inventory
-                            </button>
+                            {(
+                                [
+                                    ['profile', 'Profile', Person, false],
+                                    ['locations', 'Locations', MapPin, true],
+                                    ['stats', 'Stats', ChartColumn, true],
+                                    ['inventory', 'Inventory', BookOpen, true],
+                                ] as const
+                            ).map(([key, label, Icon, needsFiles]) => (
+                                <button
+                                    key={key}
+                                    type='button'
+                                    role='tab'
+                                    aria-selected={tab === key}
+                                    aria-controls={`mcp-${key}-panel`}
+                                    id={`mcp-${key}-tab`}
+                                    disabled={needsFiles && !capabilities.inventory}
+                                    title={
+                                        needsFiles && !capabilities.inventory
+                                            ? 'Requires file read and file content permissions'
+                                            : undefined
+                                    }
+                                    onClick={() => setTab(key)}
+                                >
+                                    {icon(Icon)}
+                                    {label}
+                                </button>
+                            ))}
                         </div>
+                        {error && (
+                            <p className='mcp-tool-error' role='alert'>
+                                {error}
+                            </p>
+                        )}
                         {submitted && (
                             <p className='mcp-submitted' role='status'>
                                 {submitted}
@@ -266,6 +331,28 @@ export default function PlayerDialog({
                                 )}
                                 {capabilities.moderate && (
                                     <>
+                                        <h3 className='mcp-tools-title'>Game mode</h3>
+                                        <div className='mcp-action-grid'>
+                                            {GAME_MODES.map(({ mode, label }) => (
+                                                <Button
+                                                    key={mode}
+                                                    type='button'
+                                                    variant={
+                                                        inventory.data?.game_mode === mode ? 'default' : 'secondary'
+                                                    }
+                                                    disabled={busy}
+                                                    onClick={() =>
+                                                        void quick(
+                                                            'gamemode',
+                                                            { mode },
+                                                            `Set ${player.name} to ${label}. They must be online.`,
+                                                        )
+                                                    }
+                                                >
+                                                    {label}
+                                                </Button>
+                                            ))}
+                                        </div>
                                         <h3 className='mcp-tools-title'>
                                             {icon(Shield, 16)}
                                             Server actions
@@ -298,34 +385,69 @@ export default function PlayerDialog({
                                 )}
                             </div>
                         ) : (
-                            <div id='mcp-inventory-panel' role='tabpanel' aria-labelledby='mcp-inventory-tab'>
+                            <div id={`mcp-${tab}-panel`} role='tabpanel' aria-labelledby={`mcp-${tab}-tab`}>
                                 <div className='mcp-inventory-heading'>
-                                    <h3>Saved inventory</h3>
+                                    <h3>
+                                        {tab === 'locations'
+                                            ? 'Locations'
+                                            : tab === 'stats'
+                                              ? 'Statistics'
+                                              : 'Saved inventory'}
+                                    </h3>
                                     <Button
-                                        size='icon'
+                                        size='sm'
                                         variant='secondary'
-                                        disabled={inventory.isValidating}
-                                        onClick={() => void inventory.mutate()}
-                                        aria-label='Refresh saved inventory'
+                                        disabled={tab === 'stats' ? stats.isValidating : inventory.isValidating}
+                                        onClick={saveAndRefresh}
+                                        title={
+                                            capabilities.moderate
+                                                ? 'Runs save-all on the server, then re-reads the files'
+                                                : 'Re-read the saved files'
+                                        }
                                     >
-                                        {icon(ArrowsRotateRight, 14, inventory.isValidating ? 'mcp-spin' : undefined)}
+                                        <span className='mcp-button-content'>
+                                            {icon(
+                                                ArrowsRotateRight,
+                                                14,
+                                                (tab === 'stats' ? stats.isValidating : inventory.isValidating)
+                                                    ? 'mcp-spin'
+                                                    : undefined,
+                                            )}
+                                            {capabilities.moderate ? 'Save & refresh' : 'Refresh'}
+                                        </span>
                                     </Button>
                                 </div>
-                                {inventory.error && (
+                                {(tab === 'stats' ? stats.error : inventory.error) && (
                                     <p className='mcp-tool-error' role='alert'>
-                                        {httpErrorToHuman(inventory.error)}
-                                        {inventory.data &&
-                                            ' The previous snapshot is shown below; this refresh failed.'}
+                                        {httpErrorToHuman((tab === 'stats' ? stats.error : inventory.error) as Error)}
                                     </p>
                                 )}
-                                {inventory.isLoading ? (
+                                {(tab === 'stats' ? stats.isLoading : inventory.isLoading) ? (
                                     <div className='mcp-empty'>
                                         {icon(ArrowsRotateRight, 25, 'mcp-spin')}
                                         <p>Reading saved player data…</p>
                                     </div>
-                                ) : inventory.data ? (
-                                    <InventoryView data={inventory.data} />
-                                ) : null}
+                                ) : tab === 'stats' ? (
+                                    stats.data && <StatsPanel data={stats.data} />
+                                ) : tab === 'locations' ? (
+                                    inventory.data && (
+                                        <LocationsPanel
+                                            data={inventory.data}
+                                            canAct={capabilities.moderate}
+                                            busy={busy}
+                                            onTeleport={teleport}
+                                            onTeleportToPlayer={(target) =>
+                                                void quick(
+                                                    'teleport_to_player',
+                                                    { target },
+                                                    `Teleporting ${player.name} to ${target}. Both must be online.`,
+                                                )
+                                            }
+                                        />
+                                    )
+                                ) : (
+                                    inventory.data && <InventoryView data={inventory.data} />
+                                )}
                             </div>
                         )}
                     </>

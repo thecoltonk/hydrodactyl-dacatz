@@ -34,7 +34,13 @@ class PlayerActionRequest extends GetPlayersRequest
     {
         return [
             'player' => ['required', 'string', 'regex:/\A[A-Za-z0-9_]{1,16}\z/'],
-            'action' => ['required', 'in:kick,ban,pardon,op,deop,whitelist_add,whitelist_remove'],
+            'action' => ['required', 'in:kick,ban,pardon,op,deop,whitelist_add,whitelist_remove,gamemode,teleport,teleport_to_player'],
+            'mode' => ['required_if:action,gamemode', 'nullable', 'in:survival,creative,adventure,spectator'],
+            'dimension' => ['nullable', 'string', 'max:128', 'regex:~\A[a-z0-9_.-]+:[a-z0-9_./-]+\z~'],
+            'x' => ['required_if:action,teleport', 'nullable', 'numeric', 'between:-30000000,30000000'],
+            'y' => ['required_if:action,teleport', 'nullable', 'numeric', 'between:-30000000,30000000'],
+            'z' => ['required_if:action,teleport', 'nullable', 'numeric', 'between:-30000000,30000000'],
+            'target' => ['required_if:action,teleport_to_player', 'nullable', 'string', 'regex:/\A[A-Za-z0-9_]{1,16}\z/'],
             'reason' => ['nullable', 'string', 'max:120', 'not_regex:/[\p{C}\p{Zl}\p{Zp}]/u'],
             'confirmed' => ['required', 'accepted'],
         ];

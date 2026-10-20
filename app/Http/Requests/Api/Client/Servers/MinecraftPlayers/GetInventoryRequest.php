@@ -28,6 +28,7 @@ class GetInventoryRequest extends GetPlayersRequest
         return [
             'player' => ['required', 'string', 'regex:/\A[A-Za-z0-9_]{1,16}\z/'],
             'uuid' => ['nullable', 'uuid'],
+            'save' => ['nullable', 'boolean'],
         ];
     }
 }

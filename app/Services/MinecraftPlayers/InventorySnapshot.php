@@ -52,6 +52,11 @@ class InventorySnapshot
             'dimension' => is_string($root['Dimension'] ?? null) ? mb_substr($root['Dimension'], 0, 128) : null,
             'position' => $this->position($root['Pos'] ?? null),
             'data_version' => is_int($root['DataVersion'] ?? null) ? $root['DataVersion'] : null,
+            'game_mode' => match ($root['playerGameType'] ?? null) {
+                0 => 'survival', 1 => 'creative', 2 => 'adventure', 3 => 'spectator', default => null,
+            },
+            'last_death' => $this->location($root['LastDeathLocation']['pos'] ?? null, $root['LastDeathLocation']['dimension'] ?? null),
+            'respawn' => $this->respawn($root),
         ];
     }
 
@@ -69,6 +74,40 @@ class InventorySnapshot
         }
 
         return $position;
+    }
+
+    /**
+     * Bed / respawn anchor. 1.21.5+ stores a "respawn" compound; older versions
+     * use SpawnX/Y/Z + SpawnDimension. Null means the world spawn.
+     */
+    private function respawn(array $root): ?array
+    {
+        if (is_array($root['respawn'] ?? null)) {
+            return $this->location($root['respawn']['pos'] ?? null, $root['respawn']['dimension'] ?? 'minecraft:overworld');
+        }
+        if (is_int($root['SpawnX'] ?? null) && is_int($root['SpawnY'] ?? null) && is_int($root['SpawnZ'] ?? null)) {
+            return $this->location([$root['SpawnX'], $root['SpawnY'], $root['SpawnZ']], $root['SpawnDimension'] ?? 'minecraft:overworld');
+        }
+
+        return null;
+    }
+
+    private function location(mixed $pos, mixed $dimension): ?array
+    {
+        if (!is_array($pos) || count($pos) !== 3) {
+            return null;
+        }
+        $coordinates = [];
+        foreach (array_values($pos) as $value) {
+            if (!is_int($value)) {
+                return null;
+            }
+            $coordinates[] = $value;
+        }
+        $dimension = is_string($dimension) && preg_match('~\A[a-z0-9_.-]+:[a-z0-9_./-]+\z~', $dimension)
+            ? $dimension : 'minecraft:overworld';
+
+        return ['dimension' => $dimension, 'position' => $coordinates];
     }
 
     private function list(mixed $value): array

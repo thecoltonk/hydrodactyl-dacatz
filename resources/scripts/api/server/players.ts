@@ -40,7 +40,66 @@ export interface SkinResult {
     url?: string;
 }
 
-export type PlayerAction = 'kick' | 'ban' | 'pardon' | 'op' | 'deop' | 'whitelist_add' | 'whitelist_remove';
+export type PlayerAction =
+    | 'kick'
+    | 'ban'
+    | 'pardon'
+    | 'op'
+    | 'deop'
+    | 'whitelist_add'
+    | 'whitelist_remove'
+    | 'gamemode'
+    | 'teleport'
+    | 'teleport_to_player';
+
+export type GameMode = 'survival' | 'creative' | 'adventure' | 'spectator';
+
+export interface SavedLocation {
+    dimension: string;
+    position: number[];
+}
+
+export interface PlayerActionExtra {
+    mode?: GameMode;
+    dimension?: string;
+    x?: number;
+    y?: number;
+    z?: number;
+    target?: string;
+}
+
+export interface StatCount {
+    id: string;
+    count: number;
+}
+
+export interface StatGroup {
+    total: number;
+    top: StatCount[];
+}
+
+export interface PlayerStats {
+    player: string;
+    uuid: string;
+    read_at: string;
+    play_time_seconds: number;
+    player_kills: number;
+    mob_kills: number;
+    deaths: number;
+    kdr: number;
+    mob_kdr: number;
+    damage_dealt: number;
+    damage_taken: number;
+    jumps: number;
+    time_since_death_seconds: number;
+    distance_cm: number;
+    distance: StatCount[];
+    blocks_mined: StatGroup;
+    items_used: StatGroup;
+    items_crafted: StatGroup;
+    mobs_killed: StatGroup;
+    killed_by: StatGroup;
+}
 
 export interface InventoryItem {
     slot: number;
@@ -66,6 +125,9 @@ export interface InventorySnapshot {
     dimension: string | null;
     position: number[] | null;
     data_version: number | null;
+    game_mode?: GameMode | null;
+    last_death?: SavedLocation | null;
+    respawn?: SavedLocation | null;
     state: { operator: boolean | null; banned: boolean | null; whitelisted: boolean | null };
 }
 
@@ -74,18 +136,38 @@ export const getPlayers = async (uuid: string): Promise<PlayerList> => {
     return data.attributes;
 };
 
-export const sendPlayerAction = async (uuid: string, name: string, action: PlayerAction, reason = '') => {
+export const sendPlayerAction = async (
+    uuid: string,
+    name: string,
+    action: PlayerAction,
+    reason = '',
+    extra: PlayerActionExtra = {},
+) => {
     await http.post(`/api/client/servers/${uuid}/players/${encodeURIComponent(name)}/actions`, {
         action,
         reason: reason || null,
         confirmed: true,
+        ...extra,
     });
 };
 
-export const getInventory = async (uuid: string, player: Player): Promise<InventorySnapshot> => {
+const snapshotParams = (player: Player, save: boolean) => ({
+    ...(player.uuid ? { uuid: player.uuid } : {}),
+    ...(save ? { save: 1 } : {}),
+});
+
+export const getInventory = async (uuid: string, player: Player, save = false): Promise<InventorySnapshot> => {
     const { data } = await http.get<{ attributes: InventorySnapshot }>(
         `/api/client/servers/${uuid}/players/${encodeURIComponent(player.name)}/inventory`,
-        { params: player.uuid ? { uuid: player.uuid } : undefined },
+        { params: snapshotParams(player, save) },
+    );
+    return data.attributes;
+};
+
+export const getPlayerStats = async (uuid: string, player: Player, save = false): Promise<PlayerStats> => {
+    const { data } = await http.get<{ attributes: PlayerStats }>(
+        `/api/client/servers/${uuid}/players/${encodeURIComponent(player.name)}/stats`,
+        { params: snapshotParams(player, save) },
     );
     return data.attributes;
 };

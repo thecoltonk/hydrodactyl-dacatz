@@ -149,6 +149,9 @@ Route::group([
             ->where('player', '[A-Za-z0-9_]{1,16}')
             ->middleware('throttle:12,1,mc-players-inventory')
             ->name('api.client.servers.players.inventory');
+        Route::get('/{player}/stats', [MinecraftPlayersController::class, 'stats'])
+            ->where('player', '[A-Za-z0-9_]{1,16}')
+            ->middleware('throttle:12,1,mc-players-stats');
         Route::post('/{player}/skin', [MinecraftPlayersController::class, 'uploadSkin'])
             ->where('player', '[A-Za-z0-9_]{1,16}')
             ->middleware('throttle:10,1,mc-players-skins');

@@ -30,15 +30,7 @@ function IconMeter({ kind, value }: { kind: 'health' | 'food'; value: number | n
                 <span>{label}</span>
                 <strong>{text}</strong>
             </div>
-            <div
-                className='mcp-hud-icons'
-                role={value === null ? 'group' : 'meter'}
-                aria-label={label}
-                aria-valuemin={value === null ? undefined : 0}
-                aria-valuemax={value === null ? undefined : health ? Math.max(20, value) : 20}
-                aria-valuenow={value ?? undefined}
-                aria-valuetext={text}
-            >
+            <div className='mcp-hud-icons' role='img' aria-label={`${label}: ${text}`}>
                 {Array.from({ length: count }, (_, index) => {
                     const slot = health ? index : 9 - index;
                     const state = points >= slot * 2 + 2 ? 'full' : points > slot * 2 ? 'half' : 'empty';
