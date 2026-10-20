@@ -22,6 +22,7 @@ import {
     Settings02Icon,
     Settings04Icon,
     Store01Icon,
+    UserGroupIcon,
     UserMultiple02Icon,
 } from '@hugeicons/core-free-icons';
 import type { IconSvgElement } from '@hugeicons/react';
@@ -120,6 +121,12 @@ const UnifiedRouter = () => {
     // advertises a mod or plugin loader (e.g. "mod/fabric", "plugin/paper").
     const showInstaller = eggFeatures.some((feature) => /^mod\//i.test(feature) || /^plugin\//i.test(feature));
 
+    // Player management is for Minecraft Java game servers (every bundled Java egg
+    // advertises "eula"); proxies have no player saves, so they are excluded.
+    const showPlayers =
+        eggFeatures.includes('eula') &&
+        !eggFeatures.some((feature) => /^plugin\/(velocity|bungeecord|waterfall)$/i.test(feature));
+
     // console.log('Current server state:', {
     //     id,
     //     uuid,
@@ -189,6 +196,7 @@ const UnifiedRouter = () => {
     const NavigationActivity = useRef(null);
     const NavigationShell = useRef(null);
     const NavigationInstaller = useRef(null);
+    const NavigationPlayers = useRef(null);
     const CustomNavigationOne = useRef<HTMLAnchorElement>(null);
     const CustomNavigationTwo = useRef<HTMLAnchorElement>(null);
     const CustomNavigationThree = useRef<HTMLAnchorElement>(null);
@@ -239,6 +247,19 @@ const UnifiedRouter = () => {
                                           ref: NavigationInstaller,
                                           end: false,
                                           permission: 'mod.download',
+                                      },
+                                  ]
+                                : []),
+                            ...(showPlayers
+                                ? [
+                                      {
+                                          to: `/server/${id}/players`,
+                                          icon: UserGroupIcon,
+                                          text: 'Players',
+                                          tabName: 'players',
+                                          ref: NavigationPlayers,
+                                          end: true,
+                                          permission: 'control.console',
                                       },
                                   ]
                                 : []),
