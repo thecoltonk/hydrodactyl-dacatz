@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Middleware\CheckDaemonType;
 use Pterodactyl\Http\Controllers\Api\Client;
 use Pterodactyl\Http\Controllers\Api\Client\Servers\MarketplaceController;
+use Pterodactyl\Http\Controllers\Api\Client\Servers\MinecraftPlayersController;
 use Pterodactyl\Http\Middleware\Activity\ServerSubject;
 use Pterodactyl\Http\Middleware\Activity\AccountSubject;
 use Pterodactyl\Http\Controllers\Api\Client\Servers\Elytra;
@@ -120,6 +121,21 @@ Route::group([
 
         Route::get('/game-versions', [MarketplaceController::class, 'gameVersions'])
             ->name('api.client.servers.marketplace.game-versions');
+    });
+
+    // Minecraft Java player list, moderation actions and saved inventories.
+    Route::group(['prefix' => '/players'], function () {
+        Route::get('/', [MinecraftPlayersController::class, 'index'])
+            ->middleware('throttle:20,1,mc-players')
+            ->name('api.client.servers.players');
+        Route::post('/{player}/actions', [MinecraftPlayersController::class, 'action'])
+            ->where('player', '[A-Za-z0-9_]{1,16}')
+            ->middleware('throttle:10,1,mc-players-actions')
+            ->name('api.client.servers.players.actions');
+        Route::get('/{player}/inventory', [MinecraftPlayersController::class, 'inventory'])
+            ->where('player', '[A-Za-z0-9_]{1,16}')
+            ->middleware('throttle:12,1,mc-players-inventory')
+            ->name('api.client.servers.players.inventory');
     });
 });
 

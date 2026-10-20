@@ -9,6 +9,7 @@ import {
     Gear,
     House,
     PencilToLine,
+    Person,
     Persons,
     Terminal,
 } from '@gravity-ui/icons';
@@ -29,6 +30,7 @@ const InstallerContainer = lazy(() => import('@/components/server/installer/Inst
 const NetworkContainer = lazy(() => import('@/components/server/network/NetworkContainer'));
 const ServerActivityLogContainer = lazy(() => import('@/components/server/ServerActivityLogContainer'));
 const ScheduleContainer = lazy(() => import('@/components/server/schedules/ScheduleContainer'));
+const PlayersContainer = lazy(() => import('@/components/server/players/PlayersContainer'));
 const SettingsContainer = lazy(() => import('@/components/server/settings/SettingsContainer'));
 const SoftwareContainer = lazy(() => import('@/components/server/software/SoftwareContainer'));
 const StartupContainer = lazy(() => import('@/components/server/startup/StartupContainer'));
@@ -184,6 +186,18 @@ const routes: Routes = {
             icon: BranchesDown,
             featureLimit: 'network',
             end: true,
+        },
+        {
+            route: 'players/*',
+            path: 'players',
+            permission: 'control.console',
+            name: 'Players',
+            component: PlayersContainer,
+            icon: Person,
+            end: true,
+            // Minecraft Java game servers only (every bundled Java egg advertises "eula";
+            // proxies are rejected server-side).
+            eggFeature: /^eula$/i,
         },
         {
             route: 'users/*',
