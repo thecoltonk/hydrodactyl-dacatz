@@ -261,20 +261,41 @@ const DashboardContainer = () => {
         [sortValue, handleSortChange],
     );
 
+    // Admins: jump straight to the admin "create server" page.
+    const newServerButton = useMemo(
+        () =>
+            rootAdmin ? (
+                <a
+                    key='new-server'
+                    href='/admin/servers/new'
+                    title='Create a new server'
+                    className='inline-flex items-center gap-1.5 rounded-xl border border-brand-400/40 bg-brand-400/15 px-3 py-2 text-sm font-medium text-brand-300 transition hover:bg-brand-400/25'
+                >
+                    <span aria-hidden className='text-base leading-none'>
+                        +
+                    </span>
+                    New server
+                </a>
+            ) : null,
+        [rootAdmin],
+    );
+
     const filterControlsDesktop = useMemo(
         () => (
             <div className='hidden lg:flex items-center gap-1.5 sm:gap-2'>
                 {groupsEnabled
                     ? [entityFilterDropdown, groupDropdown, sortDropdown]
                     : [entityFilterDropdown, sortDropdown]}
+                {newServerButton}
             </div>
         ),
-        [groupsEnabled, entityFilterDropdown, groupDropdown, sortDropdown],
+        [groupsEnabled, entityFilterDropdown, groupDropdown, sortDropdown, newServerButton],
     );
 
     const filterControlsMobile = useMemo(
         () => (
-            <div className='lg:hidden'>
+            <div className='lg:hidden flex items-center gap-1.5'>
+                {newServerButton}
                 <FiltersMenu
                     filterOptions={filterOptions || EMPTY_FILTER_OPTIONS}
                     groups={filterOptions?.groups || []}
@@ -300,6 +321,7 @@ const DashboardContainer = () => {
             handleFilterChange,
             handleGroupChange,
             handleSortChange,
+            newServerButton,
         ],
     );
 
@@ -357,12 +379,13 @@ const DashboardContainer = () => {
                                 {items.map((server, index) => (
                                     <div
                                         key={`${server.uuid}-${dashboardMode}`}
-                                        className={`transform-gpu skeleton-anim-2 ${dashboardMode === 'grid'
+                                        className={`transform-gpu skeleton-anim-2 ${
+                                            dashboardMode === 'grid'
                                                 ? items.length === 1
                                                     ? 'w-[calc(50%-0.5rem)] max-lg:w-full'
                                                     : 'w-[calc(50%-0.5rem)] max-lg:w-full'
                                                 : 'mb-4'
-                                            } max-lg:mb-4`}
+                                        } max-lg:mb-4`}
                                         style={{
                                             animationDelay: `${index * 50 + 50}ms`,
                                             animationTimingFunction:
@@ -388,8 +411,8 @@ const DashboardContainer = () => {
                                     {ownerFilter === 'admin-all'
                                         ? 'There are no other servers to display.'
                                         : ownerFilter === 'all'
-                                            ? 'No Server Shared With your Account'
-                                            : 'There are no servers associated with your account.'}
+                                          ? 'No Server Shared With your Account'
+                                          : 'There are no servers associated with your account.'}
                                 </p>
                                 <h3 className='text-lg font-medium text-zinc-200 mb-2'>
                                     {ownerFilter === 'admin-all' ? 'No other servers found' : 'No servers found'}

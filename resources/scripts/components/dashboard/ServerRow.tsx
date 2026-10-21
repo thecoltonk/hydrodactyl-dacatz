@@ -1,9 +1,13 @@
+import { Pencil } from '@gravity-ui/icons';
+import { useStoreState } from 'easy-peasy';
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import styled from 'styled-components';
 import type { Server } from '@/api/server/getServer';
 import getServerResourceUsage, { type ServerPowerState, type ServerStats } from '@/api/server/getServerResourceUsage';
 import { bytesToString, ip } from '@/lib/formatters';
+
+import QuickBuildDialog from './QuickBuildDialog';
 
 // Determines if the current value is in an alarm threshold so we can show it in red rather
 // than the more faded default style.
@@ -67,6 +71,9 @@ const ServerRow = ({ server, className, hideGroup }: { server: Server; className
     const [isSuspended, setIsSuspended] = useState(server.status === 'suspended');
     const [isInstalling, setIsInstalling] = useState(server.status === 'installing');
     const [stats, setStats] = useState<ServerStats | null>(null);
+    const rootAdmin = useStoreState((state) => state.user.data?.rootAdmin) ?? false;
+    const [editing, setEditing] = useState(false);
+    const [limits, setLimits] = useState({ memory: server.limits.memory, cpu: server.limits.cpu });
 
     // Memoized so its identity is stable across renders. Using an inline function
     // here as a useEffect dependency makes the polling effect re-fire every render
@@ -99,97 +106,129 @@ const ServerRow = ({ server, className, hideGroup }: { server: Server; className
 
     const alarms = { cpu: false, memory: false, disk: false };
     if (stats) {
-        alarms.cpu = server.limits.cpu === 0 ? false : stats.cpuUsagePercent >= server.limits.cpu * 0.9;
-        alarms.memory = isAlarmState(stats.memoryUsageInBytes, server.limits.memory);
+        alarms.cpu = limits.cpu === 0 ? false : stats.cpuUsagePercent >= limits.cpu * 0.9;
+        alarms.memory = isAlarmState(stats.memoryUsageInBytes, limits.memory);
         alarms.disk = server.limits.disk === 0 ? false : isAlarmState(stats.diskUsageInBytes, server.limits.disk);
     }
 
     return (
-        <StatusIndicatorBox
-            as={Link}
-            to={`/server/${server.id}`}
-            className={`${className} bg-mocha-500 hover:bg-mocha-400 border border-[1px] border-mocha-400 hover:border-mocha-400`}
-            $status={stats?.status || 'offline'}
-        >
-            <div className={`flex items-center min-w-0`}>
-                <div className='flex flex-col min-w-0'>
-                    <div className='flex items-center gap-2 min-w-0'>
-                        <p className={`text-xl tracking-tight font-bold truncate min-w-0 max-w-full sm:max-w-[20vw]`}>
-                            {server.name}
-                        </p>{' '}
-                        <div className={'status-bar'} />
-                    </div>
-                    <div className='flex items-center gap-2 min-w-0'>
-                        <p className={`text-sm text-[#ffffff66] truncate`}>
-                            {server.allocations
-                                .filter((alloc) => alloc.isDefault)
-                                .map((allocation) => (
-                                    <Fragment key={allocation.ip + allocation.port.toString()}>
-                                        {allocation.alias || ip(allocation.ip)}:{allocation.port}
-                                    </Fragment>
-                                ))}
-                        </p>
-                        {server.group && !hideGroup && (
-                            <span className='inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-accent/10 text-accent border border-accent/20'>
-                                {server.group.name}
-                            </span>
-                        )}
+        <div className='relative'>
+            <StatusIndicatorBox
+                as={Link}
+                to={`/server/${server.id}`}
+                className={`${className} bg-mocha-500 hover:bg-mocha-400 border border-[1px] border-mocha-400 hover:border-mocha-400`}
+                $status={stats?.status || 'offline'}
+            >
+                <div className={`flex items-center min-w-0`}>
+                    <div className='flex flex-col min-w-0'>
+                        <div className='flex items-center gap-2 min-w-0'>
+                            <p
+                                className={`text-xl tracking-tight font-bold truncate min-w-0 max-w-full sm:max-w-[20vw]`}
+                            >
+                                {server.name}
+                            </p>{' '}
+                            <div className={'status-bar'} />
+                        </div>
+                        <div className='flex items-center gap-2 min-w-0'>
+                            <p className={`text-sm text-[#ffffff66] truncate`}>
+                                {server.allocations
+                                    .filter((alloc) => alloc.isDefault)
+                                    .map((allocation) => (
+                                        <Fragment key={allocation.ip + allocation.port.toString()}>
+                                            {allocation.alias || ip(allocation.ip)}:{allocation.port}
+                                        </Fragment>
+                                    ))}
+                            </p>
+                            {server.group && !hideGroup && (
+                                <span className='inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-accent/10 text-accent border border-accent/20'>
+                                    {server.group.name}
+                                </span>
+                            )}
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div
-                className={`h-full hidden sm:flex items-center justify-center bg-mocha-500 border-[1px] border-[#ffffff11] shadow-xs rounded-md w-fit whitespace-nowrap px-4 py-2 text-sm gap-4`}
-            >
-                {!stats || isSuspended || isInstalling ? (
-                    isSuspended ? (
-                        <div className={`flex-1 text-center`}>
-                            <span className={`text-red-100 text-xs`}>
-                                {server.status === 'suspended' ? 'Suspended' : 'Connection Error'}
-                            </span>
-                        </div>
-                    ) : server.isTransferring || server.status ? (
-                        <div className={`flex-1 text-center`}>
-                            <span className={`text-zinc-100 text-xs`}>
-                                {server.isTransferring
-                                    ? 'Transferring'
-                                    : server.status === 'installing'
-                                      ? 'Installing'
-                                      : server.status === 'restoring_backup'
-                                        ? 'Restoring Backup'
-                                        : 'Unavailable'}
-                            </span>
-                        </div>
+                <div
+                    className={`h-full hidden sm:flex items-center justify-center bg-mocha-500 border-[1px] border-[#ffffff11] shadow-xs rounded-md w-fit whitespace-nowrap px-4 py-2 text-sm gap-4`}
+                >
+                    {!stats || isSuspended || isInstalling ? (
+                        isSuspended ? (
+                            <div className={`flex-1 text-center`}>
+                                <span className={`text-red-100 text-xs`}>
+                                    {server.status === 'suspended' ? 'Suspended' : 'Connection Error'}
+                                </span>
+                            </div>
+                        ) : server.isTransferring || server.status ? (
+                            <div className={`flex-1 text-center`}>
+                                <span className={`text-zinc-100 text-xs`}>
+                                    {server.isTransferring
+                                        ? 'Transferring'
+                                        : server.status === 'installing'
+                                          ? 'Installing'
+                                          : server.status === 'restoring_backup'
+                                            ? 'Restoring Backup'
+                                            : 'Unavailable'}
+                                </span>
+                            </div>
+                        ) : (
+                            <div className='text-xs opacity-25'>Sit tight!</div>
+                        )
                     ) : (
-                        <div className='text-xs opacity-25'>Sit tight!</div>
-                    )
-                ) : (
-                    <Fragment>
-                        <div className={`sm:flex hidden`}>
-                            <div className={`flex justify-center gap-2 w-fit`}>
-                                <p className='text-sm text-[#ffffff66] font-bold w-fit whitespace-nowrap'>CPU:</p>
-                                <p className='font-bold w-fit whitespace-nowrap'>{stats.cpuUsagePercent.toFixed(2)}%</p>
+                        <Fragment>
+                            <div className={`sm:flex hidden`}>
+                                <div className={`flex justify-center gap-2 w-fit`}>
+                                    <p className='text-sm text-[#ffffff66] font-bold w-fit whitespace-nowrap'>CPU:</p>
+                                    <p className='font-bold w-fit whitespace-nowrap'>
+                                        {stats.cpuUsagePercent.toFixed(2)}%
+                                    </p>
+                                </div>
                             </div>
-                        </div>
-                        <div className={`sm:flex hidden`}>
-                            <div className={`flex justify-center gap-2 w-fit`}>
-                                <p className='text-sm text-[#ffffff66] font-bold w-fit whitespace-nowrap'>RAM:</p>
-                                <p className='font-bold w-fit whitespace-nowrap'>
-                                    {bytesToString(stats.memoryUsageInBytes, 0)}
-                                </p>
+                            <div className={`sm:flex hidden`}>
+                                <div className={`flex justify-center gap-2 w-fit`}>
+                                    <p className='text-sm text-[#ffffff66] font-bold w-fit whitespace-nowrap'>RAM:</p>
+                                    <p className='font-bold w-fit whitespace-nowrap'>
+                                        {bytesToString(stats.memoryUsageInBytes, 0)}
+                                    </p>
+                                </div>
                             </div>
-                        </div>
-                        <div className={`sm:flex hidden`}>
-                            <div className={`flex justify-center gap-2 w-fit`}>
-                                <p className='text-sm text-[#ffffff66] font-bold w-fit whitespace-nowrap'>Storage:</p>
-                                <p className='font-bold w-fit whitespace-nowrap'>
-                                    {bytesToString(stats.diskUsageInBytes, 0)}
-                                </p>
+                            <div className={`sm:flex hidden`}>
+                                <div className={`flex justify-center gap-2 w-fit`}>
+                                    <p className='text-sm text-[#ffffff66] font-bold w-fit whitespace-nowrap'>
+                                        Storage:
+                                    </p>
+                                    <p className='font-bold w-fit whitespace-nowrap'>
+                                        {bytesToString(stats.diskUsageInBytes, 0)}
+                                    </p>
+                                </div>
                             </div>
-                        </div>
-                    </Fragment>
-                )}
-            </div>
-        </StatusIndicatorBox>
+                        </Fragment>
+                    )}
+                </div>
+            </StatusIndicatorBox>
+            {rootAdmin && (
+                <>
+                    <button
+                        type='button'
+                        onClick={() => setEditing(true)}
+                        aria-label={`Edit ${server.name} CPU and RAM`}
+                        title='Edit CPU and RAM'
+                        className='absolute top-2 right-2 z-30 rounded-lg border border-[#ffffff11] bg-mocha-500/90 p-1.5 text-cream-400/60 transition hover:bg-mocha-400 hover:text-cream-400'
+                    >
+                        <Pencil width={14} height={14} fill='currentColor' />
+                    </button>
+                    {editing && (
+                        <QuickBuildDialog
+                            open={editing}
+                            onClose={() => setEditing(false)}
+                            uuid={server.uuid}
+                            name={server.name}
+                            memory={limits.memory}
+                            cpu={limits.cpu}
+                            onSaved={setLimits}
+                        />
+                    )}
+                </>
+            )}
+        </div>
     );
 };
 

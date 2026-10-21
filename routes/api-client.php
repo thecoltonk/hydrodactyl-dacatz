@@ -134,6 +134,10 @@ Route::group([
             ->name('api.client.servers.marketplace.game-versions');
     });
 
+    // Admin-only CPU/RAM edit from the server list.
+    Route::patch('/quick-build', [Client\Servers\QuickBuildController::class, 'update'])
+        ->middleware('throttle:20,1,quick-build');
+
     // One-click Modrinth modpack installs (fresh install).
     Route::group(['prefix' => '/modpacks'], function () {
         Route::get('/search', [ModpacksController::class, 'search'])
