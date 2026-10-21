@@ -74,6 +74,67 @@ class InventoryService
         return ['player' => $name, 'uuid' => $uuid, 'stats' => is_array($data['stats'] ?? null) ? $data['stats'] : []];
     }
 
+    /**
+     * Everyone with saved player data, newest first, named via usercache.json.
+     *
+     * @return array<int, array{name: string, uuid: string, last_seen: ?string}>
+     */
+    public function known(Server $server): array
+    {
+        $world = $this->world($this->files->read($server, '/server.properties', 65536));
+        $names = [];
+        foreach ($this->optionalJson($server, '/usercache.json') ?? [] as $entry) {
+            if (is_array($entry) && $this->uuid($entry['uuid'] ?? null) && is_string($entry['name'] ?? null)
+                && preg_match('/\A[A-Za-z0-9_]{1,16}\z/', $entry['name'])) {
+                $names[strtolower($entry['uuid'])] = $entry['name'];
+            }
+        }
+        $players = [];
+        foreach (['/playerdata', '/players/data'] as $folder) {
+            try {
+                $entries = $this->files->directory($server, '/' . $world . $folder);
+            } catch (DaemonConnectionException) {
+                continue;
+            }
+            foreach ($entries as $entry) {
+                if (!is_array($entry) || !preg_match('/\A([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})\.dat\z/i', (string) ($entry['name'] ?? ''), $match)) {
+                    continue;
+                }
+                $uuid = strtolower($match[1]);
+                if (!isset($names[$uuid]) || isset($players[$uuid])) {
+                    continue;
+                }
+                $modified = is_string($entry['modified'] ?? null) && strtotime($entry['modified']) !== false ? $entry['modified'] : null;
+                $players[$uuid] = ['name' => $names[$uuid], 'uuid' => $uuid, 'last_seen' => $modified];
+            }
+        }
+        $players = array_values($players);
+        usort($players, fn ($a, $b) => strcmp((string) $b['last_seen'], (string) $a['last_seen']));
+
+        return array_slice($players, 0, 1000);
+    }
+
+    /**
+     * Locate a player's saved .dat file.
+     *
+     * @return array{name: string, uuid: string, path: string, content: string}
+     */
+    public function locate(Server $server, string $name, ?string $knownUuid = null): array
+    {
+        ['name' => $name, 'uuid' => $uuid, 'world' => $world] = $this->resolve($server, $name, $knownUuid);
+        foreach (['/' . $world . '/playerdata/' . $uuid . '.dat', '/' . $world . '/players/data/' . $uuid . '.dat'] as $path) {
+            try {
+                return ['name' => $name, 'uuid' => $uuid, 'path' => $path, 'content' => $this->files->read($server, $path, 2097152)];
+            } catch (DaemonConnectionException $exception) {
+                if (!in_array($exception->getStatusCode(), [404, 500], true)) {
+                    throw $exception;
+                }
+            }
+        }
+
+        throw new HttpException(404, 'No saved player data was found. The player has to join the server once first.');
+    }
+
     public function read(Server $server, string $name, ?string $knownUuid = null): array
     {
         ['name' => $name, 'uuid' => $uuid, 'world' => $world] = $this->resolve($server, $name, $knownUuid);

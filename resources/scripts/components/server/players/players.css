@@ -870,3 +870,84 @@
         height: 18px;
     }
 }
+
+.mcp-slot-active {
+    outline: 2px solid var(--color-brand-400, #f5a97f);
+    outline-offset: 1px;
+}
+
+.mcp-slot-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding: 0.9rem;
+    border: 1px solid rgb(255 255 255 / 0.1);
+    border-radius: 0.9rem;
+    background: rgb(0 0 0 / 0.18);
+}
+
+.mcp-slot-editor strong {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.875rem;
+}
+
+.mcp-slot-editor p {
+    font-size: 0.75rem;
+    opacity: 0.7;
+}
+
+.mcp-slot-editor-fields,
+.mcp-slot-editor-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.mcp-slot-editor-fields > :first-child {
+    flex: 1 1 14rem;
+}
+
+.mcp-offline-section {
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--color-mocha-300, #433b32);
+}
+
+.mcp-offline-section > h3,
+.mcp-offline-section > .mcp-offline-empty {
+    padding: 16px 20px 0;
+}
+
+.mcp-offline-section > .mcp-offline-empty {
+    padding-bottom: 20px;
+}
+
+.mcp-footer {
+    flex-wrap: wrap;
+}
+
+.mcp-offline-section h3 {
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.mcp-offline-section h3 small {
+    font-weight: 400;
+    opacity: 0.6;
+}
+
+.mcp-offline-empty {
+    font-size: 0.85rem;
+    opacity: 0.65;
+}
+
+.mcp-player-offline {
+    opacity: 0.8;
+}
+
+.mcp-player-offline:hover {
+    opacity: 1;
+}

@@ -154,6 +154,11 @@ Route::group([
             ->where('player', '[A-Za-z0-9_]{1,16}')
             ->middleware('throttle:12,1,mc-players-inventory')
             ->name('api.client.servers.players.inventory');
+        Route::get('/known', [MinecraftPlayersController::class, 'known'])
+            ->middleware('throttle:20,1,mc-players-known');
+        Route::put('/{player}/inventory', [MinecraftPlayersController::class, 'editInventory'])
+            ->where('player', '[A-Za-z0-9_]{1,16}')
+            ->middleware('throttle:20,1,mc-players-inventory-edit');
         Route::get('/{player}/stats', [MinecraftPlayersController::class, 'stats'])
             ->where('player', '[A-Za-z0-9_]{1,16}')
             ->middleware('throttle:12,1,mc-players-stats');

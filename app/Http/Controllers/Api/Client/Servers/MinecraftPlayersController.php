@@ -13,7 +13,9 @@ use Illuminate\Support\Facades\Cache;
 use Pterodactyl\Exceptions\Http\Connection\DaemonConnectionException;
 use Pterodactyl\Facades\Activity;
 use Pterodactyl\Http\Controllers\Api\Client\ClientApiController;
+use Pterodactyl\Http\Requests\Api\Client\Servers\MinecraftPlayers\EditInventoryRequest;
 use Pterodactyl\Http\Requests\Api\Client\Servers\MinecraftPlayers\GetInventoryRequest;
+use Pterodactyl\Http\Requests\Api\Client\Servers\MinecraftPlayers\KnownPlayersRequest;
 use Pterodactyl\Http\Requests\Api\Client\Servers\MinecraftPlayers\GetPlayersRequest;
 use Pterodactyl\Http\Requests\Api\Client\Servers\MinecraftPlayers\PlayerActionRequest;
 use Pterodactyl\Models\Permission;
@@ -21,6 +23,7 @@ use Pterodactyl\Models\Server;
 use Pterodactyl\Models\User;
 use Pterodactyl\Http\Requests\Api\Client\Servers\MinecraftPlayers\SkinRequest;
 use Pterodactyl\Http\Requests\Api\Client\Servers\MinecraftPlayers\UploadSkinRequest;
+use Pterodactyl\Services\MinecraftPlayers\InventoryEditor;
 use Pterodactyl\Services\MinecraftPlayers\InventoryService;
 use Pterodactyl\Services\MinecraftPlayers\OfflineModeSupport;
 use Pterodactyl\Services\MinecraftPlayers\SkinCommands;
@@ -183,6 +186,74 @@ class MinecraftPlayersController extends ClientApiController
      * Optionally flush the running server's player data to disk first, so the
      * snapshot is current. Silently skipped when the server is offline.
      */
+    /**
+     * Everyone with saved player data (online or not), for the "show offline
+     * players" list.
+     */
+    public function known(KnownPlayersRequest $request, Server $server, InventoryService $inventories): array
+    {
+        $players = Cache::remember('minecraft-players:known:' . $server->uuid, 30, fn () => $inventories->known($server));
+
+        return ['object' => 'minecraft_known_players', 'attributes' => ['players' => $players]];
+    }
+
+    /**
+     * Edit inventory / ender chest slots. Online players get /item commands;
+     * offline players have their save file rewritten.
+     */
+    public function editInventory(EditInventoryRequest $request, Server $server, InventoryEditor $editor): array
+    {
+        $data = $request->validated();
+        $changes = array_map(fn (array $change) => [
+            'area' => (string) $change['area'],
+            'slot' => (int) $change['slot'],
+            'id' => isset($change['id']) ? (string) $change['id'] : null,
+            'count' => isset($change['count']) ? (int) $change['count'] : null,
+            'expect' => isset($change['expect']) ? (string) $change['expect'] : null,
+        ], $data['changes']);
+
+        $online = $this->isOnline($server, $data['player']);
+        if ($online === null) {
+            throw new \Symfony\Component\HttpKernel\Exception\HttpException(409, 'Can\'t tell whether ' . $data['player'] . ' is online: the server status ping only lists 12 names. Enable query in server.properties (see the bottom of the Players page) or stop the server, then try again.');
+        }
+        $result = $editor->apply($server, $data['player'], $data['uuid'] ?? null, $changes, $online);
+
+        Activity::event('server:players.inventory-edited')
+            ->property(['player' => $data['player'], 'mode' => $result['mode'], 'changes' => count($changes)])
+            ->log();
+
+        return ['object' => 'minecraft_inventory_edit', 'attributes' => $result + [
+            'message' => $result['mode'] === 'online'
+                ? 'Sent to the server. The player is online, so changes apply immediately.'
+                : 'Saved to the player file. They will have it next time they join.',
+        ]];
+    }
+
+    /**
+     * Whether the player shows up in a fresh player list (null = can't tell).
+     * If the server can't be reached it is stopped, so the save file is safe.
+     */
+    private function isOnline(Server $server, string $name): ?bool
+    {
+        Cache::forget($this->cacheKey($server));
+        $properties = $this->properties($server);
+        $target = $this->targets->resolve($server, $properties);
+        if ($target === null) {
+            return false;
+        }
+        $result = $this->query->players($target);
+        foreach ($result['players'] ?? [] as $player) {
+            if (strcasecmp((string) ($player['name'] ?? ''), $name) === 0) {
+                return true;
+            }
+        }
+        // A partial status sample can miss people, so we can't be sure.
+        $partial = ($result['status'] ?? null) === 'available' && !($result['complete'] ?? false)
+            && (int) ($result['online'] ?? 0) > count($result['players'] ?? []);
+
+        return $partial ? null : false;
+    }
+
     private function saveFirst(GetInventoryRequest $request, Server $server): void
     {
         if (!$request->boolean('save')) {
@@ -199,7 +270,7 @@ class MinecraftPlayersController extends ClientApiController
     private function capabilities(User $user, Server $server): array
     {
         if (!$this->targets->supports($server)) {
-            return ['moderate' => false, 'operator' => false, 'inventory' => false];
+            return ['moderate' => false, 'operator' => false, 'inventory' => false, 'edit_inventory' => false];
         }
         $console = $user->can(Permission::ACTION_CONTROL_CONSOLE, $server);
 
@@ -208,6 +279,9 @@ class MinecraftPlayersController extends ClientApiController
             'operator' => $console && ($user->root_admin || $user->id === $server->owner_id),
             'inventory' => $console && $user->can(Permission::ACTION_FILE_READ, $server)
                 && $user->can(Permission::ACTION_FILE_READ_CONTENT, $server),
+            'edit_inventory' => $console && $user->can(Permission::ACTION_FILE_READ, $server)
+                && $user->can(Permission::ACTION_FILE_READ_CONTENT, $server)
+                && $user->can(Permission::ACTION_FILE_UPDATE, $server),
         ];
     }
 

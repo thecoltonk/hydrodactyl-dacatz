@@ -11,6 +11,31 @@ export interface PlayerCapabilities {
     moderate: boolean;
     operator: boolean;
     inventory: boolean;
+    edit_inventory?: boolean;
+}
+
+export interface KnownPlayer {
+    name: string;
+    uuid: string;
+    last_seen: string | null;
+}
+
+export type InventoryArea = 'inventory' | 'ender_chest';
+
+export interface InventoryChange {
+    area: InventoryArea;
+    slot: number;
+    /** null clears the slot */
+    id: string | null;
+    count: number | null;
+    /** item id currently in the slot (null = empty), to catch stale edits */
+    expect: string | null;
+}
+
+export interface InventoryEditResult {
+    mode: 'online' | 'offline';
+    applied: number;
+    message: string;
 }
 
 export interface PlayerList {
@@ -235,4 +260,24 @@ export const getNitroIdentity = async (name: string): Promise<NitroIdentity> => 
 export const nitroImage = (id: string, body = false) => {
     if (!/^[0-9a-f]{32}$/iu.test(id)) throw new Error('Invalid skin UUID.');
     return body ? `${NITROCRAFT}/renders/body/${id}?scale=4&overlay` : `${NITROCRAFT}/avatars/${id}?size=80&overlay`;
+};
+
+/** Everyone with saved player data, newest first. */
+export const getKnownPlayers = async (uuid: string): Promise<KnownPlayer[]> => {
+    const { data } = await http.get<{ attributes: { players: KnownPlayer[] } }>(
+        `/api/client/servers/${uuid}/players/known`,
+    );
+    return data.attributes.players;
+};
+
+export const editInventory = async (
+    uuid: string,
+    player: Player,
+    changes: InventoryChange[],
+): Promise<InventoryEditResult> => {
+    const { data } = await http.put<{ attributes: InventoryEditResult }>(
+        `/api/client/servers/${uuid}/players/${encodeURIComponent(player.name)}/inventory`,
+        { uuid: player.uuid ?? undefined, changes },
+    );
+    return data.attributes;
 };

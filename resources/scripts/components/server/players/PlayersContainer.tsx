@@ -18,7 +18,7 @@ import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 
 import { httpErrorToHuman } from '@/api/http';
-import { getPlayers, type Player, type PlayerList } from '@/api/server/players';
+import { getKnownPlayers, getPlayers, type KnownPlayer, type Player, type PlayerList } from '@/api/server/players';
 import { Input } from '@/components/elements/inputs';
 import { MainPageHeader } from '@/components/elements/MainPageHeader';
 import ServerContentBlock from '@/components/elements/ServerContentBlock';
@@ -36,6 +36,24 @@ const icon = (Icon: typeof Persons, size: number, className?: string) => (
 );
 
 const STOP_POLLING = [401, 403, 404, 409, 429];
+const SHOW_OFFLINE_KEY = 'hydrodactyl:players:show-offline';
+
+const readShowOffline = () => {
+    try {
+        return window.localStorage.getItem(SHOW_OFFLINE_KEY) === '1';
+    } catch {
+        return false;
+    }
+};
+
+const lastSeen = (value: string | null) => {
+    const time = value ? new Date(value).getTime() : Number.NaN;
+    if (!Number.isFinite(time)) return 'Last seen: unknown';
+    const minutes = Math.round((Date.now() - time) / 60000);
+    if (minutes < 60) return `Last saved ${Math.max(minutes, 1)}m ago`;
+    if (minutes < 1440) return `Last saved ${Math.round(minutes / 60)}h ago`;
+    return `Last saved ${Math.round(minutes / 1440)}d ago`;
+};
 
 const PlayersContainer = () => {
     const uuid = ServerContext.useStoreState((state) => state.server.data!.uuid);
@@ -45,6 +63,15 @@ const PlayersContainer = () => {
     const [notice, setNotice] = useState('');
     const [lookup, setLookup] = useState('');
     const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+    const [showOffline, setShowOfflineState] = useState(readShowOffline);
+    const setShowOffline = (next: boolean) => {
+        setShowOfflineState(next);
+        try {
+            window.localStorage.setItem(SHOW_OFFLINE_KEY, next ? '1' : '0');
+        } catch {
+            // Preference just won't stick.
+        }
+    };
 
     // biome-ignore lint/correctness/useExhaustiveDependencies: reset when switching servers
     useEffect(() => {
@@ -82,6 +109,17 @@ const PlayersContainer = () => {
     const players = data?.players ?? [];
     const offline = data?.online_mode === false;
     const filtered = players.filter((player) => player.name.toLowerCase().includes(search.trim().toLowerCase()));
+    const known = useSWR<KnownPlayer[], AxiosError>(
+        showOffline && capabilities.inventory ? ['minecraft-players:known', uuid] : null,
+        () => getKnownPlayers(uuid),
+        { revalidateOnFocus: false, shouldRetryOnError: false, refreshInterval: 60000 },
+    );
+    const onlineNames = new Set(players.map((player) => player.name.toLowerCase()));
+    const offlinePlayers = (known.data ?? []).filter(
+        (player) =>
+            !onlineNames.has(player.name.toLowerCase()) &&
+            player.name.toLowerCase().includes(search.trim().toLowerCase()),
+    );
     const copy = async (value: string, description: string) => {
         try {
             await navigator.clipboard.writeText(value);
@@ -363,11 +401,66 @@ const PlayersContainer = () => {
                         </ul>
                     )}
 
+                    {showOffline && capabilities.inventory && (
+                        <div className='mcp-offline-section'>
+                            <h3>
+                                Offline players
+                                <small>
+                                    {known.isLoading ? ' · loading…' : known.data ? ` · ${offlinePlayers.length}` : ''}
+                                </small>
+                            </h3>
+                            {known.error ? (
+                                <p className='mcp-offline-empty'>{httpErrorToHuman(known.error)}</p>
+                            ) : known.data && !offlinePlayers.length ? (
+                                <p className='mcp-offline-empty'>
+                                    {search.trim() ? 'No offline players match.' : 'Nobody else has saved data yet.'}
+                                </p>
+                            ) : (
+                                <ul className='mcp-player-grid'>
+                                    {offlinePlayers.slice(0, 150).map((player) => (
+                                        <li className='mcp-player mcp-player-offline' key={player.uuid}>
+                                            <PlayerAvatar
+                                                name={player.name}
+                                                skinUrl={data?.skins?.[player.name.toLowerCase()]?.url}
+                                                offline={offline}
+                                            />
+                                            <div className='mcp-player-info'>
+                                                <strong>{player.name}</strong>
+                                                <span>{lastSeen(player.last_seen)}</span>
+                                            </div>
+                                            <button
+                                                type='button'
+                                                className='mcp-copy'
+                                                aria-label={`Manage ${player.name}`}
+                                                title='Player profile, inventory and stats'
+                                                onClick={() =>
+                                                    setSelectedPlayer({ name: player.name, uuid: player.uuid })
+                                                }
+                                            >
+                                                {icon(PersonGear, 17)}
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                    )}
+
                     <footer className='mcp-footer'>
                         <span>
                             {updated ? `Last checked at ${updated}` : 'No result yet'}
                             {available && search.trim() ? ` · Showing ${filtered.length} of ${players.length}` : ''}
                         </span>
+                        {capabilities.inventory && (
+                            <label htmlFor='mcp-show-offline'>
+                                <Input.Checkbox
+                                    id='mcp-show-offline'
+                                    checked={showOffline}
+                                    onChange={(event) => setShowOffline(event.target.checked)}
+                                />
+                                <span>Show offline players</span>
+                            </label>
+                        )}
                         <label htmlFor='mcp-auto-refresh'>
                             <Input.Checkbox
                                 id='mcp-auto-refresh'

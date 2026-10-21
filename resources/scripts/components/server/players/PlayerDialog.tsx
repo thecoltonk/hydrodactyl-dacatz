@@ -14,9 +14,11 @@ import useSWR, { useSWRConfig } from 'swr';
 
 import { httpErrorToHuman } from '@/api/http';
 import {
+    editInventory,
     type GameMode,
     getInventory,
     getPlayerStats,
+    type InventoryChange,
     NITROCRAFT,
     nitroImage,
     type Player,
@@ -144,6 +146,24 @@ export default function PlayerDialog({
             await sendPlayerAction(uuid, player.name, next, '', extra);
             setSubmitted(message);
             onNotice(message);
+        } catch (failure) {
+            setError(httpErrorToHuman(failure as Error));
+        } finally {
+            setBusy(false);
+        }
+    };
+    const edit = async (change: InventoryChange) => {
+        if (busy) return;
+        setBusy(true);
+        setError('');
+        setSubmitted('');
+        try {
+            const result = await editInventory(uuid, player, [change]);
+            setSubmitted(result.message);
+            onNotice(result.message);
+            // Online edits land in the live game; save so the file view catches up.
+            saveNext.current = result.mode === 'online';
+            await inventory.mutate();
         } catch (failure) {
             setError(httpErrorToHuman(failure as Error));
         } finally {
@@ -446,7 +466,14 @@ export default function PlayerDialog({
                                         />
                                     )
                                 ) : (
-                                    inventory.data && <InventoryView data={inventory.data} />
+                                    inventory.data && (
+                                        <InventoryView
+                                            data={inventory.data}
+                                            editable={Boolean(capabilities.edit_inventory)}
+                                            busy={busy}
+                                            onEdit={(change) => void edit(change)}
+                                        />
+                                    )
                                 )}
                             </div>
                         )}
