@@ -413,17 +413,19 @@ const DashboardContainer = () => {
                                 ))}
                             </div>
                         ) : (
-                            <div className='text-center text-sm text-zinc-400 absolute w-full left-1/2 -translate-x-1/2'>
-                                <p className='max-w-sm mx-auto mb-5'>
+                            <div className='flex flex-col items-center gap-2 py-16 text-center text-sm text-zinc-400'>
+                                <h3 className='text-lg font-medium text-zinc-200'>
+                                    {ownerFilter === 'admin-all' ? 'No other servers found' : 'No servers yet'}
+                                </h3>
+                                <p className='max-w-sm'>
                                     {ownerFilter === 'admin-all'
                                         ? 'There are no other servers to display.'
                                         : ownerFilter === 'all'
-                                          ? 'No Server Shared With your Account'
-                                          : 'There are no servers associated with your account.'}
+                                          ? 'No servers are shared with your account.'
+                                          : hasPlan
+                                            ? 'Hit New server above to make your first one.'
+                                            : 'There are no servers associated with your account.'}
                                 </p>
-                                <h3 className='text-lg font-medium text-zinc-200 mb-2'>
-                                    {ownerFilter === 'admin-all' ? 'No other servers found' : 'No servers found'}
-                                </h3>
                             </div>
                         )
                     }

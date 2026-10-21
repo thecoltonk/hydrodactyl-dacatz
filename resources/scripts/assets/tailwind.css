@@ -70,20 +70,25 @@
     }
 }
 
-/* Da Catz Hosting background art (enabled by lib/branding.ts when the image exists). */
+/* Da Catz Hosting background art (enabled by lib/branding.ts when the image exists).
+   One even 80% dark layer covers the art everywhere (header, sidebar, gaps), so
+   there are no bright patches; panels add a light extra tint + blur on top. */
 html.dacatz-bg {
-    --color-bg-raised: rgb(17 15 13 / 0.8);
-    --color-bg-lowered: rgb(12 10 9 / 0.88);
+    --color-bg-raised: rgb(14 12 10 / 0.45);
+    --color-bg-lowered: rgb(12 10 9 / 0.94);
 }
 
 html.dacatz-bg #app {
     background:
-        linear-gradient(180deg, rgb(8 7 6 / 0.72) 0%, rgb(8 7 6 / 0.86) 55%, rgb(8 7 6 / 0.94) 100%),
+        linear-gradient(rgb(10 8 7 / 0.8), rgb(10 8 7 / 0.8)),
         url("/dacatz/aerial.webp") center / cover no-repeat fixed,
         #000;
 }
 
-html.dacatz-bg .bg-bg-raised,
+html.dacatz-bg .bg-bg-raised {
+    backdrop-filter: blur(12px);
+}
+
 html.dacatz-bg .bg-bg-lowered {
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(16px);
 }
