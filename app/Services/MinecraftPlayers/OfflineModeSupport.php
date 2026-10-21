@@ -12,7 +12,7 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  * Offline UUIDs are derived from the exact, case-sensitive username. Vanilla's
  * `whitelist add` first asks Mojang for the profile; when the name has no
  * Mojang account it falls back to the *lowercased* name, so a player called
- * "_Kfcz" gets whitelisted as "_kfcz" (a different UUID) and still can't join.
+ * "Cool_Cat" gets whitelisted as "cool_cat" (a different UUID) and still can't join.
  * Writing whitelist.json ourselves with the correct UUID avoids that.
  */
 class OfflineModeSupport
