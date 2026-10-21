@@ -46,6 +46,9 @@ class InstallModpackJob extends Job implements ShouldQueue
         public User $user,
         public array $plan,
         public string $operationId,
+        // Brand-new server already created with the pack's loader egg: skip the
+        // stop/wipe/egg switch/reinstall and just wait for its first install.
+        public bool $fresh = false,
     ) {
         $this->queue = 'standard';
     }
@@ -65,6 +68,16 @@ class InstallModpackJob extends Job implements ShouldQueue
         $label = $this->plan['title'] . ' ' . $this->plan['version_name'];
 
         try {
+            if ($this->fresh) {
+                $operation->updateProgress(sprintf(
+                    'Installing %s %s for Minecraft %s...',
+                    ucfirst($this->plan['loader']),
+                    $this->plan['loader_version'],
+                    $this->plan['minecraft'],
+                ));
+                $server = $this->server;
+                $this->waitForInstall($server);
+            } else {
             $operation->updateProgress('Stopping the server...');
             $daemon->kill($this->server);
             sleep(3);
@@ -89,6 +102,7 @@ class InstallModpackJob extends Job implements ShouldQueue
             ]);
             $reinstall->handle($server);
             $this->waitForInstall($server);
+            }
 
             $operation->updateProgress('Downloading the modpack archive...');
             $daemon->mkdir($server, self::WORK);

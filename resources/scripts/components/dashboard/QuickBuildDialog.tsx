@@ -119,7 +119,7 @@ export default function QuickBuildDialog({
                             min={0.5}
                             max={floorTo(gb(left.memory), 0.5)}
                             step={0.5}
-                            format={(v) => `${v} GB`}
+                            unit='GB'
                             hint={`up to ${floorTo(gb(left.memory), 0.5)} GB`}
                         />
                         <ResourceSlider
@@ -129,7 +129,7 @@ export default function QuickBuildDialog({
                             min={0.5}
                             max={floorTo(cores(left.cpu), 0.5)}
                             step={0.5}
-                            format={(v) => `${v} ${v === 1 ? 'core' : 'cores'}`}
+                            unit='cores'
                             hint={`up to ${floorTo(cores(left.cpu), 0.5)}`}
                         />
                         <ResourceSlider
@@ -139,7 +139,7 @@ export default function QuickBuildDialog({
                             min={1}
                             max={Math.floor(gb(left.disk))}
                             step={1}
-                            format={(v) => `${v} GB`}
+                            unit='GB'
                             hint={`up to ${Math.floor(gb(left.disk))} GB`}
                         />
                     </>

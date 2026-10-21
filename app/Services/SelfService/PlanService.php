@@ -98,8 +98,15 @@ class PlanService
      * Create a server for the user inside their plan, on whichever node has
      * room and a free port.
      */
-    public function create(User $user, string $name, int $eggId, int $memory, int $cpu, int $disk): Server
+    /**
+     * @param array{egg_id: int, docker_image: string, environment: array<string, string>}|null $template
+     *        Use this egg/image/environment instead of the egg's defaults (modpacks).
+     */
+    public function create(User $user, string $name, int $eggId, int $memory, int $cpu, int $disk, ?array $template = null): Server
     {
+        if ($template !== null) {
+            $eggId = (int) $template['egg_id'];
+        }
         $plan = $this->plan($user);
         if ($plan === null) {
             throw new HttpException(403, 'Your account does not have a server plan.');
@@ -117,6 +124,9 @@ class PlanService
                 throw new HttpException(422, 'That game is not available.');
             }
             $images = array_values((array) $egg->docker_images);
+            if ($template !== null) {
+                array_unshift($images, $template['docker_image']);
+            }
             if ($images === []) {
                 throw new HttpException(422, 'That game has no Docker image configured. Ask an admin.');
             }
@@ -125,6 +135,9 @@ class PlanService
             $environment = [];
             foreach ($egg->variables as $variable) {
                 $environment[$variable->env_variable] = (string) ($variable->default_value ?? '');
+            }
+            if ($template !== null) {
+                $environment = array_replace($environment, array_map('strval', $template['environment']));
             }
 
             return $this->creation->handle([
@@ -157,24 +170,45 @@ class PlanService
     }
 
     /**
-     * First free port on the node with the most RAM headroom.
+     * First free port on the node with the most RAM headroom. If nothing fits,
+     * say exactly why so an admin knows what to change.
      */
     private function allocation(int $memory, int $disk): Allocation
     {
-        $nodes = Node::query()->where('maintenance_mode', false)->get()
-            ->filter(fn (Node $node) => $node->isViable($memory, $disk))
-            ->sortByDesc(fn (Node $node) => $node->memory * (1 + $node->memory_overallocate / 100)
-                - $node->servers()->where('exclude_from_resource_calculation', false)->sum('memory'));
-
-        foreach ($nodes as $node) {
-            $allocation = Allocation::query()->where('node_id', $node->id)->whereNull('server_id')
-                ->orderBy('port')->first();
-            if ($allocation !== null) {
-                return $allocation;
+        $reasons = [];
+        $candidates = [];
+        foreach (Node::query()->get() as $node) {
+            if ($node->maintenance_mode) {
+                $reasons[] = $node->name . ' is in maintenance mode';
+                continue;
             }
+            $memoryLimit = (int) ($node->memory * (1 + $node->memory_overallocate / 100));
+            $diskLimit = (int) ($node->disk * (1 + $node->disk_overallocate / 100));
+            $counted = $node->servers()->where('exclude_from_resource_calculation', false);
+            $memoryFree = $memoryLimit - (int) (clone $counted)->sum('memory');
+            $diskFree = $diskLimit - (int) (clone $counted)->sum('disk');
+            if ($memory > $memoryFree) {
+                $reasons[] = sprintf('%s has %s GB RAM unallocated', $node->name, self::gb(max(0, $memoryFree)));
+                continue;
+            }
+            if ($disk > $diskFree) {
+                $reasons[] = sprintf('%s has %s GB storage unallocated', $node->name, self::gb(max(0, $diskFree)));
+                continue;
+            }
+            $allocation = Allocation::query()->where('node_id', $node->id)->whereNull('server_id')->orderBy('port')->first();
+            if ($allocation === null) {
+                $reasons[] = $node->name . ' has no free ports (add more under Admin > Nodes > Allocation)';
+                continue;
+            }
+            $candidates[] = [$memoryFree, $allocation];
+        }
+        if ($candidates !== []) {
+            usort($candidates, fn ($a, $b) => $b[0] <=> $a[0]);
+
+            return $candidates[0][1];
         }
 
-        throw new HttpException(422, 'No node has room for that server right now (out of RAM, storage or free ports). Ask an admin.');
+        throw new HttpException(422, 'No node has room for that server: ' . ($reasons === [] ? 'no nodes exist' : implode('; ', $reasons)) . '.');
     }
 
     public static function gb(int $mib): string

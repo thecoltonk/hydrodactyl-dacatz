@@ -64,6 +64,8 @@ Route::prefix('/account')->middleware(AccountSubject::class)->group(function () 
     // Self-service servers inside the user's plan.
     Route::get('/plan', [Client\SelfServiceController::class, 'show']);
     Route::post('/plan/servers', [Client\SelfServiceController::class, 'store'])->middleware('throttle:5,1,self-service-create');
+    Route::get('/plan/modpacks/search', [Client\SelfServiceController::class, 'modpackSearch'])->middleware('throttle:40,1,self-service-modpacks');
+    Route::get('/plan/modpacks/versions', [Client\SelfServiceController::class, 'modpackVersions'])->middleware('throttle:40,1,self-service-modpacks');
 
     // Private mod/plugin collections for one-click installs.
     Route::prefix('/mod-collections')->middleware('throttle:60,1,mod-collections')->group(function () {

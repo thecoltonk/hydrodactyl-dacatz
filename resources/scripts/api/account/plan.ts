@@ -1,6 +1,7 @@
 import useSWR from 'swr';
 
 import http from '@/api/http';
+import type { ModpackHit, ModpackSource, ModpackVersion } from '@/api/server/modpacks';
 
 export interface PlanResources {
     /** MiB */
@@ -23,6 +24,8 @@ export interface UserPlanInfo {
     used: PlanResources & { servers: number };
     minimum: PlanResources;
     eggs: PlanEgg[];
+    /** Whether CurseForge modpacks are available (API key set). */
+    curseforge?: boolean;
 }
 
 export const getPlan = async (): Promise<UserPlanInfo> => {
@@ -35,11 +38,12 @@ export const usePlan = () => useSWR<UserPlanInfo>('account:plan', getPlan, { rev
 
 export const createPlanServer = async (body: {
     name: string;
-    egg_id: number;
+    egg_id?: number;
     memory: number;
     cpu: number;
     disk: number;
-}): Promise<{ identifier: string; uuid: string }> => {
+    modpack?: { source: ModpackSource; project_id: string; version_id: string };
+}): Promise<{ identifier: string; uuid: string; operation_id: string | null }> => {
     const { data } = await http.post('/api/client/account/plan/servers', body);
     return data;
 };
@@ -56,3 +60,21 @@ export const remaining = (info: UserPlanInfo, giveBack?: PlanResources): PlanRes
 
 export const gb = (mib: number) => Math.round((mib / 1024) * 100) / 100;
 export const cores = (percent: number) => Math.round(percent) / 100;
+
+export const searchPlanModpacks = async (
+    source: ModpackSource,
+    query: string,
+    offset = 0,
+): Promise<{ hits: ModpackHit[]; total: number }> => {
+    const params: Record<string, string | number> = { source, offset };
+    if (query) params.query = query;
+    const { data } = await http.get('/api/client/account/plan/modpacks/search', { params });
+    return { hits: data?.hits ?? [], total: data?.total ?? 0 };
+};
+
+export const getPlanModpackVersions = async (source: ModpackSource, projectId: string): Promise<ModpackVersion[]> => {
+    const { data } = await http.get('/api/client/account/plan/modpacks/versions', {
+        params: { source, project_id: projectId },
+    });
+    return data?.versions ?? [];
+};
