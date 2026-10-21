@@ -119,7 +119,10 @@ public function index(Request $request): View
      */
     public function store(NewUserFormRequest $request): RedirectResponse
     {
+        // Validate the optional server plan before creating anything.
+        $request->validate(UserPlanController::rules());
         $user = $this->creationService->handle($request->normalize());
+        UserPlanController::apply($request, $user);
         $this->alert->success($this->translator->get('admin/user.notices.account_created'))->flash();
 
         return redirect()->route('admin.users.view', $user->id);
