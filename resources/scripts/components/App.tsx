@@ -3,6 +3,7 @@
 // in the root first. The github issue for this is still open. Stupid.
 // https://github.com/preactjs/signals/issues/414
 import GlobalStylesheet from '@/assets/css/GlobalStylesheet';
+import { enablePanelBackground } from '@/lib/branding';
 import '@/assets/tailwind.css';
 import '@preact/signals-react';
 import { StoreProvider } from 'easy-peasy';
@@ -19,6 +20,8 @@ import { ServerContext } from '@/state/server';
 import type { SiteSettings } from '@/state/settings';
 
 import HydrodactylProvider from './HydrodactylProvider';
+
+enablePanelBackground();
 
 // const DashboardRouter = lazy(() => import('@/routers/DashboardRouter'));
 // const ServerRouter = lazy(() => import('@/routers/ServerRouter'));

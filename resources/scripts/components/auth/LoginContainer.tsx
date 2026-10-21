@@ -7,9 +7,8 @@ import LoginFormContainer, { TitleSection } from '@/components/auth/LoginFormCon
 import Button from '@/components/elements/Button';
 import Captcha, { getCaptchaResponse } from '@/components/elements/Captcha';
 import Field from '@/components/elements/Field';
-
+import { BRAND_NAME } from '@/lib/branding';
 import CaptchaManager from '@/lib/captcha';
-
 import useFlash from '@/plugins/useFlash';
 
 import SecondaryLink from '../ui/secondary-link';
@@ -93,7 +92,7 @@ function LoginContainer() {
         >
             {({ isSubmitting }) => (
                 <LoginFormContainer className='mx-auto flex w-full max-w-md flex-col gap-6 rounded-2xl border border-cream-500/10 bg-bg-raised p-8 shadow-xl shadow-black/40'>
-                    <TitleSection title='Login' />
+                    <TitleSection title='Welcome back' subtitle={`Sign in to your ${BRAND_NAME} customer panel.`} />
                     <div className=''>
                         <Field
                             id='user'

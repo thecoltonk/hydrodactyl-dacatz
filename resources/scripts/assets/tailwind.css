@@ -69,3 +69,21 @@
         transform: translateY(0);
     }
 }
+
+/* Da Catz Hosting background art (enabled by lib/branding.ts when the image exists). */
+html.dacatz-bg {
+    --color-bg-raised: rgb(17 15 13 / 0.8);
+    --color-bg-lowered: rgb(12 10 9 / 0.88);
+}
+
+html.dacatz-bg #app {
+    background:
+        linear-gradient(180deg, rgb(8 7 6 / 0.72) 0%, rgb(8 7 6 / 0.86) 55%, rgb(8 7 6 / 0.94) 100%),
+        url("/dacatz/aerial.webp") center / cover no-repeat fixed,
+        #000;
+}
+
+html.dacatz-bg .bg-bg-raised,
+html.dacatz-bg .bg-bg-lowered {
+    backdrop-filter: blur(10px);
+}

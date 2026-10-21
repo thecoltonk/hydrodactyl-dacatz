@@ -14,7 +14,7 @@ const TitleSection = ({ title, subtitle }: { title?: string; subtitle?: string }
     <div className='space-y-2 font-medium mb-8'>
         {title && <h2 className='text-2xl sm:text-3xl'>{title}</h2>}
         {/*{subtitle && <span className='text-primary/40'>{subtitle}</span>}*/}
-        {subtitle && <span className='text-secondary'>{subtitle}</span>}
+        {subtitle && <span className='block text-secondary'>{subtitle}</span>}
     </div>
 );
 
