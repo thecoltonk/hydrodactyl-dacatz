@@ -1,9 +1,18 @@
-import { ArrowDownToLine, Check, Heart, HeartFill } from '@gravity-ui/icons';
+import { ArrowDownToLine, Bookmark, BookmarkFill, Check, Plus, ThunderboltFill } from '@gravity-ui/icons';
 
 import { useState } from 'react';
 
 import type { MarketplaceProject } from '@/api/server/marketplace';
 import { Button } from '@/components/ui/button';
+import {
+    DropdownMenu,
+    DropdownMenuCheckboxItem,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 
 import type { InstalledEntry } from './installedState';
@@ -14,11 +23,13 @@ interface InstallerCardProps {
     installedEntry?: InstalledEntry;
     onInstall: (project: MarketplaceProject) => void;
     installing?: boolean;
-    /** Whether the current user has favorited this project. */
-    favorited?: boolean;
-    onToggleFavorite?: (project: MarketplaceProject) => void;
-    /** Usernames that favorited this project (shown in the Favorites tab). */
-    favoritedBy?: string[];
+    /** The user's collections and whether this project is in each. */
+    collections?: { id: number; name: string; has: boolean }[];
+    onToggleCollection?: (collectionId: number, project: MarketplaceProject) => void;
+    onNewCollection?: (project: MarketplaceProject) => void;
+    /** Install the newest compatible version without opening the picker. */
+    onQuickInstall?: (project: MarketplaceProject) => void;
+    quickInstalling?: boolean;
 }
 
 const formatNumber = (n: number): string => {
@@ -32,10 +43,13 @@ const InstallerCard = ({
     installedEntry,
     onInstall,
     installing,
-    favorited,
-    onToggleFavorite,
-    favoritedBy,
+    collections,
+    onToggleCollection,
+    onNewCollection,
+    onQuickInstall,
+    quickInstalling,
 }: InstallerCardProps) => {
+    const saved = collections?.some((collection) => collection.has) ?? false;
     const isInstalled = Boolean(installedEntry);
     // Some marketplace projects have no usable icon (Hangar projects without a
     // custom avatar 404 on the CDN; some Spiget resources have none at all).
@@ -104,37 +118,57 @@ const InstallerCard = ({
                     </div>
                     <p className='mt-0.5 truncate text-xs text-cream-400/60'>by {project.author || 'Unknown'}</p>
                 </div>
-                {onToggleFavorite && (
-                    <button
-                        type='button'
-                        onClick={() => onToggleFavorite(project)}
-                        aria-pressed={Boolean(favorited)}
-                        aria-label={favorited ? 'Remove from favorites' : 'Add to favorites'}
-                        title={favorited ? 'Remove from favorites' : 'Add to favorites (everyone can see favorites)'}
-                        className={cn(
-                            'flex-shrink-0 rounded-lg p-1.5 transition hover:bg-mocha-300/40',
-                            favorited ? 'text-red-400' : 'text-cream-400/40 hover:text-red-400',
-                        )}
-                    >
-                        {favorited ? (
-                            <HeartFill width={18} height={18} fill='currentColor' />
-                        ) : (
-                            <Heart width={18} height={18} fill='currentColor' />
-                        )}
-                    </button>
+                {onToggleCollection && collections && (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <button
+                                type='button'
+                                aria-label='Add to a collection'
+                                title={
+                                    saved
+                                        ? `In ${collections
+                                              .filter((c) => c.has)
+                                              .map((c) => c.name)
+                                              .join(', ')}`
+                                        : 'Add to a collection'
+                                }
+                                className={cn(
+                                    'flex-shrink-0 rounded-lg p-1.5 transition hover:bg-mocha-300/40',
+                                    saved ? 'text-brand-400' : 'text-cream-400/40 hover:text-brand-400',
+                                )}
+                            >
+                                {saved ? (
+                                    <BookmarkFill width={18} height={18} fill='currentColor' />
+                                ) : (
+                                    <Bookmark width={18} height={18} fill='currentColor' />
+                                )}
+                            </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align='end'>
+                            <DropdownMenuLabel>Collections</DropdownMenuLabel>
+                            {collections.map((collection) => (
+                                <DropdownMenuCheckboxItem
+                                    key={collection.id}
+                                    checked={collection.has}
+                                    onSelect={(event) => event.preventDefault()}
+                                    onCheckedChange={() => onToggleCollection(collection.id, project)}
+                                >
+                                    {collection.name}
+                                </DropdownMenuCheckboxItem>
+                            ))}
+                            {collections.length > 0 && <DropdownMenuSeparator />}
+                            <DropdownMenuItem className='gap-2' onSelect={() => onNewCollection?.(project)}>
+                                <Plus width={14} height={14} fill='currentColor' />
+                                New collection…
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 )}
             </div>
 
             <p className='mt-3 line-clamp-2 min-h-[2.5rem] text-xs leading-relaxed text-cream-400/70'>
                 {project.description || 'No description provided.'}
             </p>
-
-            {favoritedBy && favoritedBy.length > 0 && (
-                <p className='mt-2 flex items-center gap-1 truncate text-[11px] text-red-300/80'>
-                    <HeartFill width={11} height={11} fill='currentColor' />
-                    {favoritedBy.join(', ')}
-                </p>
-            )}
 
             <div className='mt-3 flex flex-wrap gap-1.5'>
                 {project.categories.slice(0, 3).map((category) => (
@@ -149,20 +183,35 @@ const InstallerCard = ({
 
             <div className='mt-auto flex items-center justify-between pt-4'>
                 <span className='text-[11px] text-cream-400/50'>{formatNumber(project.downloads)} downloads</span>
-                <Button
-                    size='sm'
-                    variant={isInstalled ? 'attention' : 'secondary'}
-                    disabled={installing}
-                    onClick={() => onInstall(project)}
-                    className='gap-1.5'
-                >
-                    {isInstalled ? (
-                        <Check width={16} height={16} fill='currentColor' />
-                    ) : (
-                        <ArrowDownToLine width={16} height={16} fill='currentColor' />
+                <div className='flex items-center gap-1.5'>
+                    {onQuickInstall && !isInstalled && (
+                        <Button
+                            size='sm'
+                            variant='secondary'
+                            disabled={quickInstalling || installing}
+                            onClick={() => onQuickInstall(project)}
+                            title='Install the newest version for this server'
+                            className='gap-1.5'
+                        >
+                            <ThunderboltFill width={14} height={14} fill='currentColor' />
+                            {quickInstalling ? 'Installing…' : 'Quick'}
+                        </Button>
                     )}
-                    {installing ? 'Installing…' : isInstalled ? 'Manage' : 'Install'}
-                </Button>
+                    <Button
+                        size='sm'
+                        variant={isInstalled ? 'attention' : 'secondary'}
+                        disabled={installing}
+                        onClick={() => onInstall(project)}
+                        className='gap-1.5'
+                    >
+                        {isInstalled ? (
+                            <Check width={16} height={16} fill='currentColor' />
+                        ) : (
+                            <ArrowDownToLine width={16} height={16} fill='currentColor' />
+                        )}
+                        {installing ? 'Installing…' : isInstalled ? 'Manage' : 'Install'}
+                    </Button>
+                </div>
             </div>
         </div>
     );

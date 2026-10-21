@@ -6,18 +6,14 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Pterodactyl\Http\Controllers\Api\Client\ClientApiController;
-use Pterodactyl\Http\Requests\Api\Client\Servers\Marketplace\DestroyFavoriteRequest;
 use Pterodactyl\Http\Requests\Api\Client\Servers\Marketplace\DestroyInstallRequest;
 use Pterodactyl\Http\Requests\Api\Client\Servers\Marketplace\GameVersionsRequest;
 use Pterodactyl\Http\Requests\Api\Client\Servers\Marketplace\GetProjectRequest;
-use Pterodactyl\Http\Requests\Api\Client\Servers\Marketplace\ListFavoritesRequest;
 use Pterodactyl\Http\Requests\Api\Client\Servers\Marketplace\ListInstallsRequest;
 use Pterodactyl\Http\Requests\Api\Client\Servers\Marketplace\LoadersRequest;
 use Pterodactyl\Http\Requests\Api\Client\Servers\Marketplace\ResolveInstallRequest;
 use Pterodactyl\Http\Requests\Api\Client\Servers\Marketplace\SearchMarketplaceRequest;
-use Pterodactyl\Http\Requests\Api\Client\Servers\Marketplace\StoreFavoriteRequest;
 use Pterodactyl\Http\Requests\Api\Client\Servers\Marketplace\StoreInstallRequest;
-use Pterodactyl\Models\MarketplaceFavorite;
 use Pterodactyl\Models\MarketplaceInstall;
 use Pterodactyl\Services\Marketplace\DestinationResolver;
 use Pterodactyl\Services\Marketplace\MarketplaceException;
@@ -248,87 +244,6 @@ class MarketplaceController extends ClientApiController
             'filename' => $i->filename,
             'installed_at' => $i->installed_at?->toIso8601String(),
         ];
-    }
-
-    /**
-     * Every user's favorites, panel-wide. Public by design: the Favorites tab
-     * shows what everyone has starred, grouped by username.
-     */
-    public function favorites(ListFavoritesRequest $request): JsonResponse
-    {
-        $userId = $request->user()->id;
-
-        $favorites = MarketplaceFavorite::query()
-            ->with('user:id,username')
-            ->orderByDesc('created_at')
-            ->limit(1000)
-            ->get();
-
-        return response()->json([
-            'favorites' => $favorites
-                ->filter(fn (MarketplaceFavorite $f) => $f->user !== null)
-                ->map(fn (MarketplaceFavorite $f) => [
-                    'type' => $f->type,
-                    'username' => $f->user->username,
-                    'mine' => $f->user_id === $userId,
-                    'created_at' => $f->created_at?->toIso8601String(),
-                    'project' => [
-                        'source' => $f->source,
-                        'id' => $f->project_id,
-                        'title' => $f->title,
-                        'slug' => $f->slug,
-                        'description' => $f->description,
-                        'author' => $f->author,
-                        'icon' => $f->icon,
-                        'downloads' => $f->downloads,
-                        'categories' => [],
-                        'url' => $f->url,
-                        'updated_at' => null,
-                    ],
-                ])
-                ->values()
-                ->all(),
-        ]);
-    }
-
-    public function favorite(StoreFavoriteRequest $request): JsonResponse
-    {
-        $userId = $request->user()->id;
-        $identity = [
-            'user_id' => $userId,
-            'type' => $request->input('type'),
-            'source' => $request->input('source'),
-            'project_id' => $request->input('project_id'),
-        ];
-
-        $exists = MarketplaceFavorite::query()->where($identity)->exists();
-        if (!$exists && MarketplaceFavorite::query()->where('user_id', $userId)->count() >= MarketplaceFavorite::PER_USER_LIMIT) {
-            return response()->json(['error' => 'You can have up to ' . MarketplaceFavorite::PER_USER_LIMIT . ' favorites.'], 422);
-        }
-
-        MarketplaceFavorite::query()->updateOrCreate($identity, [
-            'title' => (string) $request->input('title'),
-            'slug' => (string) $request->input('slug', ''),
-            'author' => (string) $request->input('author', ''),
-            'description' => mb_substr((string) $request->input('description', ''), 0, 500),
-            'icon' => $request->input('icon'),
-            'url' => $request->input('url'),
-            'downloads' => (int) $request->input('downloads', 0),
-        ]);
-
-        return response()->json([], 204);
-    }
-
-    public function unfavorite(DestroyFavoriteRequest $request): JsonResponse
-    {
-        MarketplaceFavorite::query()
-            ->where('user_id', $request->user()->id)
-            ->where('type', $request->input('type'))
-            ->where('source', $request->input('source'))
-            ->where('project_id', $request->input('project_id'))
-            ->delete();
-
-        return response()->json([], 204);
     }
 
     /**

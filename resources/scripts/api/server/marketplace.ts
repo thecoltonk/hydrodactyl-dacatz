@@ -159,24 +159,37 @@ export const getMarketplaceGameVersions = async (uuid: string): Promise<GameVers
     return (data as { game_versions?: GameVersions })?.game_versions ?? {};
 };
 
-export interface MarketplaceFavorite {
+export interface ModCollectionItem {
     type: MarketplaceType;
-    username: string;
-    mine: boolean;
-    created_at: string | null;
     project: MarketplaceProject;
 }
 
-/** Every user's favorites, panel-wide. */
-export const getMarketplaceFavorites = async (uuid: string): Promise<MarketplaceFavorite[]> => {
-    const { data } = await http.get(`/api/client/servers/${uuid}/marketplace/favorites`);
+export interface ModCollection {
+    id: number;
+    name: string;
+    items: ModCollectionItem[];
+}
 
-    return (data?.favorites as MarketplaceFavorite[] | undefined) ?? [];
+const COLLECTIONS = '/api/client/account/mod-collections';
+
+/** The signed-in user's private collections (shared across all their servers). */
+export const getModCollections = async (): Promise<ModCollection[]> => {
+    const { data } = await http.get(COLLECTIONS);
+    return (data?.collections as ModCollection[] | undefined) ?? [];
 };
 
-export const addMarketplaceFavorite = (uuid: string, type: MarketplaceType, project: MarketplaceProject) =>
+export const createModCollection = async (name: string): Promise<ModCollection> => {
+    const { data } = await http.post(COLLECTIONS, { name });
+    return data.collection as ModCollection;
+};
+
+export const renameModCollection = (id: number, name: string) => http.patch(`${COLLECTIONS}/${id}`, { name });
+
+export const deleteModCollection = (id: number) => http.delete(`${COLLECTIONS}/${id}`);
+
+export const addToModCollection = (id: number, type: MarketplaceType, project: MarketplaceProject) =>
     http.post(
-        `/api/client/servers/${uuid}/marketplace/favorites`,
+        `${COLLECTIONS}/${id}/items`,
         cleanParams({
             type,
             source: project.source,
@@ -191,7 +204,7 @@ export const addMarketplaceFavorite = (uuid: string, type: MarketplaceType, proj
         }),
     );
 
-export const removeMarketplaceFavorite = (uuid: string, type: MarketplaceType, project: MarketplaceProject) =>
-    http.delete(`/api/client/servers/${uuid}/marketplace/favorites`, {
+export const removeFromModCollection = (id: number, type: MarketplaceType, project: MarketplaceProject) =>
+    http.delete(`${COLLECTIONS}/${id}/items`, {
         params: { type, source: project.source, project_id: project.id },
     });

@@ -1,4 +1,4 @@
-import { ChevronDown, Funnel, Magnifier, TrashBin } from '@gravity-ui/icons';
+import { ChevronDown, Funnel, Magnifier, Pencil, Plus, ThunderboltFill, TrashBin } from '@gravity-ui/icons';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -6,19 +6,23 @@ import { httpErrorToHuman } from '@/api/http';
 import deleteFiles from '@/api/server/files/deleteFiles';
 import type {
     GameVersions,
-    MarketplaceFavorite,
     MarketplaceProject,
     MarketplaceSourceMeta,
     MarketplaceType,
+    ModCollection,
 } from '@/api/server/marketplace';
 import {
-    addMarketplaceFavorite,
-    getMarketplaceFavorites,
+    addToModCollection,
+    createModCollection,
+    deleteModCollection,
     getMarketplaceGameVersions,
     getMarketplaceLoaders,
-    removeMarketplaceFavorite,
+    getModCollections,
+    removeFromModCollection,
+    renameModCollection,
     searchMarketplace,
 } from '@/api/server/marketplace';
+import { Dialog } from '@/components/elements/dialog';
 import { MainPageHeader } from '@/components/elements/MainPageHeader';
 import ServerContentBlock from '@/components/elements/ServerContentBlock';
 import Spinner from '@/components/elements/Spinner';
@@ -33,9 +37,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { ServerContext } from '@/state/server';
-import { destinationFolder, isMinecraftCapable, loadersFor } from './eggFeatures';
+import { destinationFolder, isMinecraftCapable, loadersFor, supportsType } from './eggFeatures';
 import InstallerCard from './InstallerCard';
 import { type InstalledEntry, type InstalledItem, readAllInstalled, removeInstall } from './installedState';
+import { quickInstall } from './quickInstall';
 import { sourceLabel } from './sources';
 import VersionPicker from './VersionPicker';
 
@@ -169,9 +174,16 @@ const InstallerContainer = () => {
     const eggFeatures = ServerContext.useStoreState((state) => state.server.data?.eggFeatures ?? []);
     const variables = ServerContext.useStoreState((state) => state.server.data?.variables ?? []);
 
-    const [view, setView] = useState<'browse' | 'favorites' | 'installed'>('browse');
-    const [favorites, setFavorites] = useState<MarketplaceFavorite[]>([]);
-    const [favoriteOwner, setFavoriteOwner] = useState<string>('all');
+    // 'browse' | 'installed' | 'c:<collection id>'
+    const [view, setView] = useState<string>('browse');
+    const [collections, setCollections] = useState<ModCollection[]>([]);
+    const [naming, setNaming] = useState<
+        | { mode: 'create'; name: string; add?: { project: MarketplaceProject; type: MarketplaceType } }
+        | { mode: 'rename'; name: string; id: number }
+        | null
+    >(null);
+    const [quickKey, setQuickKey] = useState<string | null>(null);
+    const [batch, setBatch] = useState<{ done: number; total: number } | null>(null);
     const [tab, setTabState] = useState<MarketplaceType>(() => readSavedTab() ?? 'plugin');
 
     /** Switch section and remember the choice for the next visit. */
@@ -219,68 +231,83 @@ const InstallerContainer = () => {
         refreshInstalled();
     }, [refreshInstalled]);
 
-    const refreshFavorites = useCallback(() => {
-        if (!uuid) return;
-        getMarketplaceFavorites(uuid)
-            .then(setFavorites)
-            .catch(() => setFavorites([]));
-    }, [uuid]);
+    const refreshCollections = useCallback(() => {
+        getModCollections()
+            .then(setCollections)
+            .catch(() => setCollections([]));
+    }, []);
 
     useEffect(() => {
-        refreshFavorites();
-    }, [refreshFavorites]);
+        refreshCollections();
+    }, [refreshCollections]);
 
-    useEffect(() => {
-        if (view === 'favorites') refreshFavorites();
-    }, [view, refreshFavorites]);
+    const itemKey = (type: MarketplaceType, project: MarketplaceProject) => `${type}:${project.source}:${project.id}`;
 
-    const favoriteKey = (type: MarketplaceType, project: MarketplaceProject) =>
-        `${type}:${project.source}:${project.id}`;
-
-    const myFavorites = useMemo(
-        () => new Set(favorites.filter((f) => f.mine).map((f) => favoriteKey(f.type, f.project))),
-        [favorites],
+    const collectionsFor = useCallback(
+        (type: MarketplaceType, project: MarketplaceProject) =>
+            collections.map((collection) => ({
+                id: collection.id,
+                name: collection.name,
+                has: collection.items.some((item) => itemKey(item.type, item.project) === itemKey(type, project)),
+            })),
+        [collections],
     );
 
-    const toggleFavorite = useCallback(
-        async (project: MarketplaceProject, type: MarketplaceType) => {
-            if (!uuid) return;
-            const active = myFavorites.has(favoriteKey(type, project));
+    const toggleCollection = useCallback(
+        async (collectionId: number, project: MarketplaceProject, type: MarketplaceType) => {
+            const collection = collections.find((entry) => entry.id === collectionId);
+            if (!collection) return;
+            const has = collection.items.some((item) => itemKey(item.type, item.project) === itemKey(type, project));
             try {
-                if (active) {
-                    await removeMarketplaceFavorite(uuid, type, project);
+                if (has) {
+                    await removeFromModCollection(collectionId, type, project);
+                    toast.success(`Removed ${project.title} from ${collection.name}.`);
                 } else {
-                    await addMarketplaceFavorite(uuid, type, project);
-                    toast.success(`Added ${project.title} to favorites.`);
+                    await addToModCollection(collectionId, type, project);
+                    toast.success(`Added ${project.title} to ${collection.name}.`);
                 }
-                refreshFavorites();
+                refreshCollections();
             } catch (err) {
-                toast.error(httpErrorToHuman(err as Error) || 'Could not update favorites.');
+                toast.error(httpErrorToHuman(err as Error) || 'Could not update the collection.');
             }
         },
-        [uuid, myFavorites, refreshFavorites],
+        [collections, refreshCollections],
     );
 
-    // Favorites for the active tab, one card per project with everyone who
-    // starred it. "all" shows everyone's; otherwise one user's.
-    const favoriteOwners = useMemo(() => {
-        const names = new Set(favorites.filter((f) => !f.mine).map((f) => f.username));
-        return [...names].sort((a, b) => a.localeCompare(b));
-    }, [favorites]);
-
-    const favoriteCards = useMemo(() => {
-        const cards = new Map<string, { project: MarketplaceProject; by: string[] }>();
-        for (const favorite of favorites) {
-            if (favorite.type !== tab) continue;
-            if (favoriteOwner === 'mine' && !favorite.mine) continue;
-            if (favoriteOwner !== 'all' && favoriteOwner !== 'mine' && favorite.username !== favoriteOwner) continue;
-            const key = favoriteKey(favorite.type, favorite.project);
-            const entry = cards.get(key) ?? { project: favorite.project, by: [] };
-            entry.by.push(favorite.mine ? 'you' : favorite.username);
-            cards.set(key, entry);
+    const saveNaming = useCallback(async () => {
+        if (!naming) return;
+        const name = naming.name.trim();
+        if (!name) return;
+        try {
+            if (naming.mode === 'create') {
+                const created = await createModCollection(name);
+                if (naming.add) await addToModCollection(created.id, naming.add.type, naming.add.project);
+                toast.success(naming.add ? `Created ${name} with ${naming.add.project.title}.` : `Created ${name}.`);
+                if (!naming.add) setView(`c:${created.id}`);
+            } else {
+                await renameModCollection(naming.id, name);
+            }
+            setNaming(null);
+            refreshCollections();
+        } catch (err) {
+            toast.error(httpErrorToHuman(err as Error) || 'Could not save the collection.');
         }
-        return [...cards.values()];
-    }, [favorites, tab, favoriteOwner]);
+    }, [naming, refreshCollections]);
+
+    const removeCollection = useCallback(
+        async (collection: ModCollection) => {
+            if (!window.confirm(`Delete the "${collection.name}" collection? Installed files stay on the server.`))
+                return;
+            try {
+                await deleteModCollection(collection.id);
+                setView('browse');
+                refreshCollections();
+            } catch (err) {
+                toast.error(httpErrorToHuman(err as Error) || 'Could not delete the collection.');
+            }
+        },
+        [refreshCollections],
+    );
 
     // Re-sync when the user opens the Installed view, so a jar deleted via the
     // file manager (in another tab or while away) is pruned on entry.
@@ -485,6 +512,80 @@ const InstallerContainer = () => {
             ?.entry;
     }, [picker, installedItems]);
 
+    // Quick installs always target the server's own Minecraft version (from
+    // the egg), not whatever is picked in the browse filter.
+    const serverGameVersion = useMemo(
+        () => findEggVersion(gameVersions)?.version ?? gameVersion,
+        [findEggVersion, gameVersions, gameVersion],
+    );
+
+    const runQuickInstall = useCallback(
+        (project: MarketplaceProject, type: MarketplaceType) => {
+            if (!uuid) return Promise.reject(new Error('Server not loaded.'));
+            return quickInstall({
+                uuid,
+                type,
+                project,
+                loader: loadersFor(eggFeatures, type, knownLoaders)[0] ?? null,
+                gameVersion: serverGameVersion,
+            });
+        },
+        [uuid, eggFeatures, knownLoaders, serverGameVersion],
+    );
+
+    const quickOne = useCallback(
+        async (project: MarketplaceProject, type: MarketplaceType) => {
+            const key = itemKey(type, project);
+            setQuickKey(key);
+            try {
+                const result = await runQuickInstall(project, type);
+                toast.success(`Installed ${result.filename}. Restart your server to load it.`);
+                refreshInstalled();
+            } catch (err) {
+                toast.error(httpErrorToHuman(err as Error) || `Could not install ${project.title}.`);
+            } finally {
+                setQuickKey(null);
+            }
+        },
+        [runQuickInstall, refreshInstalled],
+    );
+
+    const installCollection = useCallback(
+        async (collection: ModCollection) => {
+            const pending = collection.items.filter(
+                (item) => supportsType(eggFeatures, item.type) && !installedEntryFor(item.project),
+            );
+            if (pending.length === 0) {
+                toast.success('Everything in this collection is already installed.');
+                return;
+            }
+            setBatch({ done: 0, total: pending.length });
+            const failed: string[] = [];
+            for (const [index, item] of pending.entries()) {
+                setQuickKey(itemKey(item.type, item.project));
+                try {
+                    await runQuickInstall(item.project, item.type);
+                } catch (err) {
+                    failed.push(`${item.project.title}: ${httpErrorToHuman(err as Error)}`);
+                }
+                setBatch({ done: index + 1, total: pending.length });
+            }
+            setQuickKey(null);
+            setBatch(null);
+            refreshInstalled();
+            const installed = pending.length - failed.length;
+            if (installed > 0)
+                toast.success(`Installed ${installed} from ${collection.name}. Restart your server to load them.`);
+            if (failed.length > 0)
+                toast.error(`${failed.length} failed. ${failed.slice(0, 3).join(' · ')}`, { duration: 15000 });
+        },
+        [eggFeatures, installedEntryFor, runQuickInstall, refreshInstalled],
+    );
+
+    const activeCollection = view.startsWith('c:')
+        ? collections.find((collection) => `c:${collection.id}` === view)
+        : undefined;
+
     if (!isMinecraftCapable(eggFeatures)) {
         return null;
     }
@@ -500,29 +601,42 @@ const InstallerContainer = () => {
                     </p>
                 </MainPageHeader>
 
-                <div className='inline-flex rounded-xl border border-mocha-300/50 bg-mocha-400/50 p-1'>
-                    {(['browse', 'favorites', 'installed'] as const).map((v) => (
+                <div className='flex flex-wrap items-center gap-1 rounded-xl border border-mocha-300/50 bg-mocha-400/50 p-1'>
+                    {[
+                        { key: 'browse', label: 'Browse' },
+                        ...collections.map((collection) => ({
+                            key: `c:${collection.id}`,
+                            label: `${collection.name} (${collection.items.length})`,
+                        })),
+                        { key: 'installed', label: `Installed (${installedItems.length})` },
+                    ].map((entry) => (
                         <button
-                            key={v}
+                            key={entry.key}
                             type='button'
-                            onClick={() => setView(v)}
+                            onClick={() => setView(entry.key)}
                             className={cn(
-                                'rounded-lg px-4 py-2 text-sm font-medium capitalize transition',
-                                view === v
+                                'rounded-lg px-4 py-2 text-sm font-medium transition',
+                                view === entry.key
                                     ? 'bg-brand-400/70 text-mocha-500'
                                     : 'text-cream-400/70 hover:bg-mocha-300/40',
                             )}
                         >
-                            {v === 'installed'
-                                ? `Installed (${installedItems.length})`
-                                : v === 'favorites'
-                                  ? 'Favorites'
-                                  : 'Browse'}
+                            {entry.label}
                         </button>
                     ))}
+                    <button
+                        type='button'
+                        onClick={() => setNaming({ mode: 'create', name: '' })}
+                        title='New collection'
+                        aria-label='New collection'
+                        className='flex items-center gap-1 rounded-lg px-3 py-2 text-sm text-cream-400/60 transition hover:bg-mocha-300/40 hover:text-cream-400'
+                    >
+                        <Plus width={14} height={14} fill='currentColor' />
+                        Collection
+                    </button>
                 </div>
 
-                {view !== 'installed' && (
+                {view === 'browse' && (
                     <div className='inline-flex rounded-xl border border-mocha-300/50 bg-mocha-400/50 p-1'>
                         {TABS.map((entry) => (
                             <button
@@ -543,46 +657,100 @@ const InstallerContainer = () => {
                     </div>
                 )}
 
-                {view === 'favorites' && (
+                {view.startsWith('c:') && !activeCollection && (
+                    <div className='rounded-2xl border border-mocha-300/50 bg-mocha-400/50 py-16 text-center text-cream-400/60'>
+                        Loading collection…
+                    </div>
+                )}
+
+                {activeCollection && (
                     <div className='space-y-4'>
-                        <div className='flex flex-wrap items-center gap-2'>
-                            {[
-                                { key: 'all', label: 'Everyone' },
-                                { key: 'mine', label: 'Mine' },
-                                ...favoriteOwners.map((name) => ({ key: name, label: name })),
-                            ].map((owner) => (
-                                <button
-                                    key={owner.key}
-                                    type='button'
-                                    aria-pressed={favoriteOwner === owner.key}
-                                    onClick={() => setFavoriteOwner(owner.key)}
-                                    className={cn(
-                                        'rounded-lg border px-3 py-1.5 text-xs font-medium transition',
-                                        favoriteOwner === owner.key
-                                            ? 'border-brand-400/60 bg-brand-400/70 text-mocha-500'
-                                            : 'border-mocha-300/50 bg-mocha-400/50 text-cream-400/70 hover:bg-mocha-300/40',
-                                    )}
+                        <div className='flex flex-wrap items-center justify-between gap-3'>
+                            <div>
+                                <h2 className='text-lg font-semibold text-cream-400'>{activeCollection.name}</h2>
+                                <p className='text-xs text-cream-400/50'>
+                                    Only you can see this collection. It works on all of your servers.
+                                </p>
+                            </div>
+                            <div className='flex flex-wrap items-center gap-2'>
+                                <Button
+                                    onClick={() => void installCollection(activeCollection)}
+                                    disabled={batch !== null || activeCollection.items.length === 0}
+                                    className='gap-2'
                                 >
-                                    {owner.label}
-                                </button>
-                            ))}
+                                    {batch ? (
+                                        <Spinner size='small' />
+                                    ) : (
+                                        <ThunderboltFill width={14} height={14} fill='currentColor' />
+                                    )}
+                                    {batch ? `Installing ${batch.done}/${batch.total}…` : 'Install all'}
+                                </Button>
+                                <Button
+                                    variant='secondary'
+                                    size='sm'
+                                    className='gap-1.5'
+                                    onClick={() =>
+                                        setNaming({
+                                            mode: 'rename',
+                                            id: activeCollection.id,
+                                            name: activeCollection.name,
+                                        })
+                                    }
+                                >
+                                    <Pencil width={14} height={14} fill='currentColor' />
+                                    Rename
+                                </Button>
+                                <Button
+                                    variant='ghost'
+                                    size='sm'
+                                    className='gap-1.5 text-red-400 hover:bg-red-500/10'
+                                    onClick={() => void removeCollection(activeCollection)}
+                                >
+                                    <TrashBin width={14} height={14} fill='currentColor' />
+                                    Delete
+                                </Button>
+                            </div>
                         </div>
-                        {favoriteCards.length === 0 ? (
+                        <p className='text-xs text-cream-400/50'>
+                            Install all grabs the newest version of each item for this server
+                            {serverGameVersion ? ` (Minecraft ${serverGameVersion})` : ''} and skips anything already
+                            installed
+                            {activeCollection.items.some((item) => !supportsType(eggFeatures, item.type))
+                                ? ` or that this server can't run (${activeCollection.items.filter((item) => !supportsType(eggFeatures, item.type)).length} ${
+                                      supportsType(eggFeatures, 'mod') ? 'plugins' : 'mods'
+                                  } skipped)`
+                                : ''}
+                            .
+                        </p>
+                        {activeCollection.items.length === 0 ? (
                             <div className='rounded-2xl border border-mocha-300/50 bg-mocha-400/50 py-16 text-center text-cream-400/60'>
-                                No favorite {tab === 'plugin' ? 'plugins' : 'mods'} yet. Tap the heart on anything in
-                                Browse. Everyone on the panel can see favorites.
+                                Empty for now. In Browse, tap the bookmark on any mod or plugin to add it here.
                             </div>
                         ) : (
                             <div className='grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3'>
-                                {favoriteCards.map(({ project, by }) => (
+                                {activeCollection.items.map(({ type, project }) => (
                                     <InstallerCard
-                                        key={`${project.source}:${project.id}`}
+                                        key={itemKey(type, project)}
                                         project={project}
                                         installedEntry={installedEntryFor(project)}
-                                        onInstall={(p) => openPicker(p, tab, p.source, directory, loader)}
-                                        favorited={myFavorites.has(favoriteKey(tab, project))}
-                                        onToggleFavorite={(p) => void toggleFavorite(p, tab)}
-                                        favoritedBy={by}
+                                        onInstall={(p) =>
+                                            openPicker(
+                                                p,
+                                                type,
+                                                p.source,
+                                                destinationFolder(type),
+                                                loadersFor(eggFeatures, type, knownLoaders)[0] ?? null,
+                                            )
+                                        }
+                                        collections={collectionsFor(type, project)}
+                                        onToggleCollection={(id, p) => void toggleCollection(id, p, type)}
+                                        onNewCollection={(p) =>
+                                            setNaming({ mode: 'create', name: '', add: { project: p, type } })
+                                        }
+                                        onQuickInstall={
+                                            supportsType(eggFeatures, type) ? (p) => void quickOne(p, type) : undefined
+                                        }
+                                        quickInstalling={quickKey === itemKey(type, project)}
                                     />
                                 ))}
                             </div>
@@ -735,8 +903,13 @@ const InstallerContainer = () => {
                                             project={project}
                                             installedEntry={installedEntryFor(project)}
                                             onInstall={(p) => openPicker(p, tab, p.source, directory, loader)}
-                                            favorited={myFavorites.has(favoriteKey(tab, project))}
-                                            onToggleFavorite={(p) => void toggleFavorite(p, tab)}
+                                            collections={collectionsFor(tab, project)}
+                                            onToggleCollection={(id, p) => void toggleCollection(id, p, tab)}
+                                            onNewCollection={(p) =>
+                                                setNaming({ mode: 'create', name: '', add: { project: p, type: tab } })
+                                            }
+                                            onQuickInstall={(p) => void quickOne(p, tab)}
+                                            quickInstalling={quickKey === itemKey(tab, project)}
                                         />
                                     ))}
                                 </div>
@@ -846,6 +1019,45 @@ const InstallerContainer = () => {
                     </div>
                 )}
             </div>
+
+            <Dialog
+                open={naming !== null}
+                onClose={() => setNaming(null)}
+                title={naming?.mode === 'rename' ? 'Rename collection' : 'New collection'}
+                description={
+                    naming?.mode === 'create' && naming.add
+                        ? `${naming.add.project.title} will be added to it.`
+                        : 'Group mods or plugins you install often, like Performance or Visuals.'
+                }
+            >
+                <form
+                    className='flex flex-col gap-3'
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        void saveNaming();
+                    }}
+                >
+                    <input
+                        type='text'
+                        aria-label='Collection name'
+                        placeholder='Performance'
+                        maxLength={64}
+                        value={naming?.name ?? ''}
+                        onChange={(event) =>
+                            setNaming((current) => (current ? { ...current, name: event.target.value } : current))
+                        }
+                        className='w-full rounded-xl border border-mocha-300/50 bg-mocha-400/50 px-4 py-3 text-sm text-cream-400 placeholder:text-cream-400/40 focus:border-brand-400/60 focus:outline-none'
+                    />
+                    <div className='flex justify-end gap-2'>
+                        <Button type='button' variant='secondary' onClick={() => setNaming(null)}>
+                            Cancel
+                        </Button>
+                        <Button type='submit' disabled={!naming?.name.trim()}>
+                            {naming?.mode === 'rename' ? 'Save' : 'Create'}
+                        </Button>
+                    </div>
+                </form>
+            </Dialog>
 
             <VersionPicker
                 open={picker !== null}

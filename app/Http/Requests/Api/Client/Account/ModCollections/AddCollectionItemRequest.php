@@ -1,18 +1,11 @@
 <?php
 
-namespace Pterodactyl\Http\Requests\Api\Client\Servers\Marketplace;
+namespace Pterodactyl\Http\Requests\Api\Client\Account\ModCollections;
 
-use Pterodactyl\Contracts\Http\ClientPermissionsRequest;
 use Pterodactyl\Http\Requests\Api\Client\ClientApiRequest;
-use Pterodactyl\Models\Permission;
 
-class StoreFavoriteRequest extends ClientApiRequest implements ClientPermissionsRequest
+class AddCollectionItemRequest extends ClientApiRequest
 {
-    public function permission(): string
-    {
-        return Permission::ACTION_MOD_DOWNLOAD;
-    }
-
     public function rules(): array
     {
         return [

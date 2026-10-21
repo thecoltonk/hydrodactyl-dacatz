@@ -61,6 +61,16 @@ Route::prefix('/account')->middleware(AccountSubject::class)->group(function () 
     Route::post('/api-keys', [Client\ApiKeyController::class, 'store']);
     Route::delete('/api-keys/{identifier}', [Client\ApiKeyController::class, 'delete']);
 
+    // Private mod/plugin collections for one-click installs.
+    Route::prefix('/mod-collections')->middleware('throttle:60,1,mod-collections')->group(function () {
+        Route::get('/', [Client\ModCollectionsController::class, 'index']);
+        Route::post('/', [Client\ModCollectionsController::class, 'store']);
+        Route::patch('/{collection}', [Client\ModCollectionsController::class, 'update'])->whereNumber('collection');
+        Route::delete('/{collection}', [Client\ModCollectionsController::class, 'destroy'])->whereNumber('collection');
+        Route::post('/{collection}/items', [Client\ModCollectionsController::class, 'addItem'])->whereNumber('collection');
+        Route::delete('/{collection}/items', [Client\ModCollectionsController::class, 'removeItem'])->whereNumber('collection');
+    });
+
     Route::prefix('/ssh-keys')->group(function () {
         Route::get('/', [Client\SSHKeyController::class, 'index']);
         Route::post('/', [Client\SSHKeyController::class, 'store']);
@@ -122,11 +132,6 @@ Route::group([
 
         Route::get('/game-versions', [MarketplaceController::class, 'gameVersions'])
             ->name('api.client.servers.marketplace.game-versions');
-
-        // Panel-wide favorites (everyone sees everyone's).
-        Route::get('/favorites', [MarketplaceController::class, 'favorites']);
-        Route::post('/favorites', [MarketplaceController::class, 'favorite']);
-        Route::delete('/favorites', [MarketplaceController::class, 'unfavorite']);
     });
 
     // One-click Modrinth modpack installs (fresh install).
