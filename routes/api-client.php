@@ -122,6 +122,11 @@ Route::group([
 
         Route::get('/game-versions', [MarketplaceController::class, 'gameVersions'])
             ->name('api.client.servers.marketplace.game-versions');
+
+        // Panel-wide favorites (everyone sees everyone's).
+        Route::get('/favorites', [MarketplaceController::class, 'favorites']);
+        Route::post('/favorites', [MarketplaceController::class, 'favorite']);
+        Route::delete('/favorites', [MarketplaceController::class, 'unfavorite']);
     });
 
     // One-click Modrinth modpack installs (fresh install).

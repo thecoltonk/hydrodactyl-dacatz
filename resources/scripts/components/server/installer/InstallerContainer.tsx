@@ -6,11 +6,19 @@ import { httpErrorToHuman } from '@/api/http';
 import deleteFiles from '@/api/server/files/deleteFiles';
 import type {
     GameVersions,
+    MarketplaceFavorite,
     MarketplaceProject,
     MarketplaceSourceMeta,
     MarketplaceType,
 } from '@/api/server/marketplace';
-import { getMarketplaceGameVersions, getMarketplaceLoaders, searchMarketplace } from '@/api/server/marketplace';
+import {
+    addMarketplaceFavorite,
+    getMarketplaceFavorites,
+    getMarketplaceGameVersions,
+    getMarketplaceLoaders,
+    removeMarketplaceFavorite,
+    searchMarketplace,
+} from '@/api/server/marketplace';
 import { MainPageHeader } from '@/components/elements/MainPageHeader';
 import ServerContentBlock from '@/components/elements/ServerContentBlock';
 import Spinner from '@/components/elements/Spinner';
@@ -161,7 +169,9 @@ const InstallerContainer = () => {
     const eggFeatures = ServerContext.useStoreState((state) => state.server.data?.eggFeatures ?? []);
     const variables = ServerContext.useStoreState((state) => state.server.data?.variables ?? []);
 
-    const [view, setView] = useState<'browse' | 'installed'>('browse');
+    const [view, setView] = useState<'browse' | 'favorites' | 'installed'>('browse');
+    const [favorites, setFavorites] = useState<MarketplaceFavorite[]>([]);
+    const [favoriteOwner, setFavoriteOwner] = useState<string>('all');
     const [tab, setTabState] = useState<MarketplaceType>(() => readSavedTab() ?? 'plugin');
 
     /** Switch section and remember the choice for the next visit. */
@@ -208,6 +218,69 @@ const InstallerContainer = () => {
     useEffect(() => {
         refreshInstalled();
     }, [refreshInstalled]);
+
+    const refreshFavorites = useCallback(() => {
+        if (!uuid) return;
+        getMarketplaceFavorites(uuid)
+            .then(setFavorites)
+            .catch(() => setFavorites([]));
+    }, [uuid]);
+
+    useEffect(() => {
+        refreshFavorites();
+    }, [refreshFavorites]);
+
+    useEffect(() => {
+        if (view === 'favorites') refreshFavorites();
+    }, [view, refreshFavorites]);
+
+    const favoriteKey = (type: MarketplaceType, project: MarketplaceProject) =>
+        `${type}:${project.source}:${project.id}`;
+
+    const myFavorites = useMemo(
+        () => new Set(favorites.filter((f) => f.mine).map((f) => favoriteKey(f.type, f.project))),
+        [favorites],
+    );
+
+    const toggleFavorite = useCallback(
+        async (project: MarketplaceProject, type: MarketplaceType) => {
+            if (!uuid) return;
+            const active = myFavorites.has(favoriteKey(type, project));
+            try {
+                if (active) {
+                    await removeMarketplaceFavorite(uuid, type, project);
+                } else {
+                    await addMarketplaceFavorite(uuid, type, project);
+                    toast.success(`Added ${project.title} to favorites.`);
+                }
+                refreshFavorites();
+            } catch (err) {
+                toast.error(httpErrorToHuman(err as Error) || 'Could not update favorites.');
+            }
+        },
+        [uuid, myFavorites, refreshFavorites],
+    );
+
+    // Favorites for the active tab, one card per project with everyone who
+    // starred it. "all" shows everyone's; otherwise one user's.
+    const favoriteOwners = useMemo(() => {
+        const names = new Set(favorites.filter((f) => !f.mine).map((f) => f.username));
+        return [...names].sort((a, b) => a.localeCompare(b));
+    }, [favorites]);
+
+    const favoriteCards = useMemo(() => {
+        const cards = new Map<string, { project: MarketplaceProject; by: string[] }>();
+        for (const favorite of favorites) {
+            if (favorite.type !== tab) continue;
+            if (favoriteOwner === 'mine' && !favorite.mine) continue;
+            if (favoriteOwner !== 'all' && favoriteOwner !== 'mine' && favorite.username !== favoriteOwner) continue;
+            const key = favoriteKey(favorite.type, favorite.project);
+            const entry = cards.get(key) ?? { project: favorite.project, by: [] };
+            entry.by.push(favorite.mine ? 'you' : favorite.username);
+            cards.set(key, entry);
+        }
+        return [...cards.values()];
+    }, [favorites, tab, favoriteOwner]);
 
     // Re-sync when the user opens the Installed view, so a jar deleted via the
     // file manager (in another tab or while away) is pruned on entry.
@@ -428,7 +501,7 @@ const InstallerContainer = () => {
                 </MainPageHeader>
 
                 <div className='inline-flex rounded-xl border border-mocha-300/50 bg-mocha-400/50 p-1'>
-                    {(['browse', 'installed'] as const).map((v) => (
+                    {(['browse', 'favorites', 'installed'] as const).map((v) => (
                         <button
                             key={v}
                             type='button'
@@ -440,32 +513,85 @@ const InstallerContainer = () => {
                                     : 'text-cream-400/70 hover:bg-mocha-300/40',
                             )}
                         >
-                            {v === 'installed' ? `Installed (${installedItems.length})` : 'Browse'}
+                            {v === 'installed'
+                                ? `Installed (${installedItems.length})`
+                                : v === 'favorites'
+                                  ? 'Favorites'
+                                  : 'Browse'}
                         </button>
                     ))}
                 </div>
 
-                {view === 'browse' && (
-                    <>
-                        <div className='inline-flex rounded-xl border border-mocha-300/50 bg-mocha-400/50 p-1'>
-                            {TABS.map((entry) => (
+                {view !== 'installed' && (
+                    <div className='inline-flex rounded-xl border border-mocha-300/50 bg-mocha-400/50 p-1'>
+                        {TABS.map((entry) => (
+                            <button
+                                key={entry.key}
+                                type='button'
+                                title={entry.hint}
+                                onClick={() => setTab(entry.key)}
+                                className={cn(
+                                    'rounded-lg px-4 py-2 text-sm font-medium transition',
+                                    tab === entry.key
+                                        ? 'bg-brand-400/70 text-mocha-500'
+                                        : 'text-cream-400/70 hover:bg-mocha-300/40',
+                                )}
+                            >
+                                {entry.label}
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                {view === 'favorites' && (
+                    <div className='space-y-4'>
+                        <div className='flex flex-wrap items-center gap-2'>
+                            {[
+                                { key: 'all', label: 'Everyone' },
+                                { key: 'mine', label: 'Mine' },
+                                ...favoriteOwners.map((name) => ({ key: name, label: name })),
+                            ].map((owner) => (
                                 <button
-                                    key={entry.key}
+                                    key={owner.key}
                                     type='button'
-                                    title={entry.hint}
-                                    onClick={() => setTab(entry.key)}
+                                    aria-pressed={favoriteOwner === owner.key}
+                                    onClick={() => setFavoriteOwner(owner.key)}
                                     className={cn(
-                                        'rounded-lg px-4 py-2 text-sm font-medium transition',
-                                        tab === entry.key
-                                            ? 'bg-brand-400/70 text-mocha-500'
-                                            : 'text-cream-400/70 hover:bg-mocha-300/40',
+                                        'rounded-lg border px-3 py-1.5 text-xs font-medium transition',
+                                        favoriteOwner === owner.key
+                                            ? 'border-brand-400/60 bg-brand-400/70 text-mocha-500'
+                                            : 'border-mocha-300/50 bg-mocha-400/50 text-cream-400/70 hover:bg-mocha-300/40',
                                     )}
                                 >
-                                    {entry.label}
+                                    {owner.label}
                                 </button>
                             ))}
                         </div>
+                        {favoriteCards.length === 0 ? (
+                            <div className='rounded-2xl border border-mocha-300/50 bg-mocha-400/50 py-16 text-center text-cream-400/60'>
+                                No favorite {tab === 'plugin' ? 'plugins' : 'mods'} yet. Tap the heart on anything in
+                                Browse. Everyone on the panel can see favorites.
+                            </div>
+                        ) : (
+                            <div className='grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3'>
+                                {favoriteCards.map(({ project, by }) => (
+                                    <InstallerCard
+                                        key={`${project.source}:${project.id}`}
+                                        project={project}
+                                        installedEntry={installedEntryFor(project)}
+                                        onInstall={(p) => openPicker(p, tab, p.source, directory, loader)}
+                                        favorited={myFavorites.has(favoriteKey(tab, project))}
+                                        onToggleFavorite={(p) => void toggleFavorite(p, tab)}
+                                        favoritedBy={by}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
 
+                {view === 'browse' && (
+                    <>
                         <div className='flex flex-col gap-3 lg:flex-row lg:items-center'>
                             <div className='relative flex-1'>
                                 <Magnifier
@@ -609,6 +735,8 @@ const InstallerContainer = () => {
                                             project={project}
                                             installedEntry={installedEntryFor(project)}
                                             onInstall={(p) => openPicker(p, tab, p.source, directory, loader)}
+                                            favorited={myFavorites.has(favoriteKey(tab, project))}
+                                            onToggleFavorite={(p) => void toggleFavorite(p, tab)}
                                         />
                                     ))}
                                 </div>

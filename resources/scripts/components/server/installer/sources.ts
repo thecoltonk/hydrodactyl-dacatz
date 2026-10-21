@@ -7,6 +7,7 @@ import type { MarketplaceType } from '@/api/server/marketplace';
  */
 export const SOURCE_LABELS: Record<string, string> = {
     modrinth: 'Modrinth',
+    curseforge: 'CurseForge',
     hangar: 'Hangar',
     spiget: 'Spigot',
 };

@@ -33,6 +33,23 @@ class CurseForgeModpacks
 
     private const PACK_LIMIT = 268435456; // 256 MiB
 
+    /**
+     * Explain a 401/403. CurseForge keys are 60 characters and contain several
+     * "$" signs, which docker compose treats as variables unless doubled.
+     */
+    public static function keyProblem(): string
+    {
+        $length = strlen(trim((string) config('hydrodactyl.modpacks.curseforge_api_key')));
+        if ($length !== 60) {
+            return sprintf(
+                'CurseForge rejected the API key. The panel sees a %d character key but CurseForge keys are 60. In docker-compose.yml every $ in the key must be written as $$, then run docker compose up -d panel.',
+                $length,
+            );
+        }
+
+        return 'CurseForge rejected the API key. Check CURSEFORGE_API_KEY.';
+    }
+
     public function configured(): bool
     {
         return trim((string) config('hydrodactyl.modpacks.curseforge_api_key', '')) !== '';
@@ -396,7 +413,7 @@ class CurseForgeModpacks
             throw new ModpackException('Could not reach CurseForge.', 0, $exception);
         }
         if (in_array($response->status(), [401, 403], true)) {
-            throw new ModpackException('CurseForge rejected the API key. Check CURSEFORGE_API_KEY.');
+            throw new ModpackException(self::keyProblem());
         }
         if ($response->status() === 404) {
             throw new ModpackException('That modpack or file was not found on CurseForge.');

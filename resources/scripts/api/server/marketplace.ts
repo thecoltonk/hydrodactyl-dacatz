@@ -158,3 +158,40 @@ export const getMarketplaceGameVersions = async (uuid: string): Promise<GameVers
 
     return (data as { game_versions?: GameVersions })?.game_versions ?? {};
 };
+
+export interface MarketplaceFavorite {
+    type: MarketplaceType;
+    username: string;
+    mine: boolean;
+    created_at: string | null;
+    project: MarketplaceProject;
+}
+
+/** Every user's favorites, panel-wide. */
+export const getMarketplaceFavorites = async (uuid: string): Promise<MarketplaceFavorite[]> => {
+    const { data } = await http.get(`/api/client/servers/${uuid}/marketplace/favorites`);
+
+    return (data?.favorites as MarketplaceFavorite[] | undefined) ?? [];
+};
+
+export const addMarketplaceFavorite = (uuid: string, type: MarketplaceType, project: MarketplaceProject) =>
+    http.post(
+        `/api/client/servers/${uuid}/marketplace/favorites`,
+        cleanParams({
+            type,
+            source: project.source,
+            project_id: project.id,
+            title: project.title,
+            slug: project.slug,
+            author: project.author,
+            description: project.description?.slice(0, 2000),
+            icon: project.icon?.startsWith('https://') ? project.icon : null,
+            url: project.url?.startsWith('https://') ? project.url : null,
+            downloads: project.downloads,
+        }),
+    );
+
+export const removeMarketplaceFavorite = (uuid: string, type: MarketplaceType, project: MarketplaceProject) =>
+    http.delete(`/api/client/servers/${uuid}/marketplace/favorites`, {
+        params: { type, source: project.source, project_id: project.id },
+    });

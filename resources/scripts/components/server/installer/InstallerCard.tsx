@@ -1,4 +1,4 @@
-import { ArrowDownToLine, Check } from '@gravity-ui/icons';
+import { ArrowDownToLine, Check, Heart, HeartFill } from '@gravity-ui/icons';
 
 import { useState } from 'react';
 
@@ -14,6 +14,11 @@ interface InstallerCardProps {
     installedEntry?: InstalledEntry;
     onInstall: (project: MarketplaceProject) => void;
     installing?: boolean;
+    /** Whether the current user has favorited this project. */
+    favorited?: boolean;
+    onToggleFavorite?: (project: MarketplaceProject) => void;
+    /** Usernames that favorited this project (shown in the Favorites tab). */
+    favoritedBy?: string[];
 }
 
 const formatNumber = (n: number): string => {
@@ -22,7 +27,15 @@ const formatNumber = (n: number): string => {
     return String(n);
 };
 
-const InstallerCard = ({ project, installedEntry, onInstall, installing }: InstallerCardProps) => {
+const InstallerCard = ({
+    project,
+    installedEntry,
+    onInstall,
+    installing,
+    favorited,
+    onToggleFavorite,
+    favoritedBy,
+}: InstallerCardProps) => {
     const isInstalled = Boolean(installedEntry);
     // Some marketplace projects have no usable icon (Hangar projects without a
     // custom avatar 404 on the CDN; some Spiget resources have none at all).
@@ -91,11 +104,37 @@ const InstallerCard = ({ project, installedEntry, onInstall, installing }: Insta
                     </div>
                     <p className='mt-0.5 truncate text-xs text-cream-400/60'>by {project.author || 'Unknown'}</p>
                 </div>
+                {onToggleFavorite && (
+                    <button
+                        type='button'
+                        onClick={() => onToggleFavorite(project)}
+                        aria-pressed={Boolean(favorited)}
+                        aria-label={favorited ? 'Remove from favorites' : 'Add to favorites'}
+                        title={favorited ? 'Remove from favorites' : 'Add to favorites (everyone can see favorites)'}
+                        className={cn(
+                            'flex-shrink-0 rounded-lg p-1.5 transition hover:bg-mocha-300/40',
+                            favorited ? 'text-red-400' : 'text-cream-400/40 hover:text-red-400',
+                        )}
+                    >
+                        {favorited ? (
+                            <HeartFill width={18} height={18} fill='currentColor' />
+                        ) : (
+                            <Heart width={18} height={18} fill='currentColor' />
+                        )}
+                    </button>
+                )}
             </div>
 
             <p className='mt-3 line-clamp-2 min-h-[2.5rem] text-xs leading-relaxed text-cream-400/70'>
                 {project.description || 'No description provided.'}
             </p>
+
+            {favoritedBy && favoritedBy.length > 0 && (
+                <p className='mt-2 flex items-center gap-1 truncate text-[11px] text-red-300/80'>
+                    <HeartFill width={11} height={11} fill='currentColor' />
+                    {favoritedBy.join(', ')}
+                </p>
+            )}
 
             <div className='mt-3 flex flex-wrap gap-1.5'>
                 {project.categories.slice(0, 3).map((category) => (

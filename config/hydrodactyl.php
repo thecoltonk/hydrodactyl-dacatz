@@ -56,6 +56,11 @@ return [
                 'download_hosts' => ['cdn.modrinth.com', 'cdn-raw.modrinth.com', 'github.com', 'raw.githubusercontent.com'],
             ],
 
+            // Mods + Bukkit plugins. Needs CURSEFORGE_API_KEY (see modpacks).
+            'curseforge' => [
+                'enabled' => (bool) env('MARKETPLACE_CURSEFORGE_ENABLED', true),
+            ],
+
             // Plugin-only sources.
             'hangar' => [
                 // PaperMC's plugin platform (https://hangar.papermc.io). Always

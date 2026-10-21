@@ -2,6 +2,7 @@
 
 namespace Pterodactyl\Services\Marketplace;
 
+use Pterodactyl\Services\Marketplace\Sources\CurseForgeSource;
 use Pterodactyl\Services\Marketplace\Sources\HangarSource;
 use Pterodactyl\Services\Marketplace\Sources\ModrinthSource;
 use Pterodactyl\Services\Marketplace\Sources\SpigetSource;
@@ -23,6 +24,7 @@ class SourceRegistry
     {
         return array_values(array_filter([
             $this->get('modrinth'),
+            $this->get('curseforge'),
             $this->get('hangar'),
             $this->get('spiget'),
         ]));
@@ -36,6 +38,7 @@ class SourceRegistry
 
         $source = match ($key) {
             'modrinth' => $this->makeModrinth(),
+            'curseforge' => $this->makeCurseForge(),
             'hangar' => $this->makeHangar(),
             'spiget' => $this->makeSpiget(),
             default => null,
@@ -66,6 +69,19 @@ class SourceRegistry
         }
 
         return new ModrinthSource();
+    }
+
+    protected function makeCurseForge(): ?MarketplaceSource
+    {
+        // Only offered once a CurseForge API key is configured.
+        if (
+            !config('hydrodactyl.marketplace.sources.curseforge.enabled', true)
+            || trim((string) config('hydrodactyl.modpacks.curseforge_api_key')) === ''
+        ) {
+            return null;
+        }
+
+        return new CurseForgeSource();
     }
 
     protected function makeHangar(): ?MarketplaceSource
