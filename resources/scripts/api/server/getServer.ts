@@ -56,10 +56,13 @@ export interface Server {
     egg: string;
     daemonType: string;
     group: ServerGroupMembership | null;
+    /** True when the signed-in user owns this server. */
+    isOwner?: boolean;
 }
 
 export const rawDataToServerObject = ({ attributes: data }: FractalResponseData): Server => ({
     id: data.identifier,
+    isOwner: Boolean(data.server_owner),
     internalId: data.internal_id,
     uuid: data.uuid,
     name: data.name,

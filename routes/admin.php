@@ -113,6 +113,7 @@ Route::group(['prefix' => 'users'], function () {
     Route::post('/new', [Admin\UserController::class, 'store']);
 
     Route::patch('/view/{user:id}', [Admin\UserController::class, 'update']);
+    Route::patch('/view/{user:id}/plan', [Admin\UserPlanController::class, 'update'])->name('admin.users.plan');
     Route::delete('/view/{user:id}', [Admin\UserController::class, 'delete']);
 });
 

@@ -10,6 +10,9 @@ Hydrodactyl v6.4.1 plus:
 - **Modpacks tab**: one-click Modrinth and CurseForge modpack installs (fresh install).
 - **Plugins & Mods**: CurseForge source, private per-user collections, quick install and
   "install all".
+- **Server plans**: admins give a user total RAM / CPU / storage / server count (Admin → Users →
+  user → Server Plan). That user can then create, resize and delete their own servers from the
+  dashboard within those totals. Admins also get a pencil on every server to resize it freely.
 - **Da Catz branding**: login screen and optional background art.
 
 CurseForge needs `CURSEFORGE_API_KEY` in the panel's compose environment (write every `$` as `$$`).

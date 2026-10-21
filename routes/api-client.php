@@ -61,6 +61,10 @@ Route::prefix('/account')->middleware(AccountSubject::class)->group(function () 
     Route::post('/api-keys', [Client\ApiKeyController::class, 'store']);
     Route::delete('/api-keys/{identifier}', [Client\ApiKeyController::class, 'delete']);
 
+    // Self-service servers inside the user's plan.
+    Route::get('/plan', [Client\SelfServiceController::class, 'show']);
+    Route::post('/plan/servers', [Client\SelfServiceController::class, 'store'])->middleware('throttle:5,1,self-service-create');
+
     // Private mod/plugin collections for one-click installs.
     Route::prefix('/mod-collections')->middleware('throttle:60,1,mod-collections')->group(function () {
         Route::get('/', [Client\ModCollectionsController::class, 'index']);
@@ -134,9 +138,11 @@ Route::group([
             ->name('api.client.servers.marketplace.game-versions');
     });
 
-    // Admin-only CPU/RAM edit from the server list.
+    // CPU/RAM/storage edit and delete from the server list (admins, or plan owners).
     Route::patch('/quick-build', [Client\Servers\QuickBuildController::class, 'update'])
         ->middleware('throttle:20,1,quick-build');
+    Route::delete('/self-service', [Client\Servers\QuickBuildController::class, 'destroy'])
+        ->middleware('throttle:5,1,self-service-delete');
 
     // One-click Modrinth modpack installs (fresh install).
     Route::group(['prefix' => '/modpacks'], function () {

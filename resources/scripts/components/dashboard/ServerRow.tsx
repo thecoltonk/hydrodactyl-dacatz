@@ -3,6 +3,7 @@ import { useStoreState } from 'easy-peasy';
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import styled from 'styled-components';
+import { usePlan } from '@/api/account/plan';
 import type { Server } from '@/api/server/getServer';
 import getServerResourceUsage, { type ServerPowerState, type ServerStats } from '@/api/server/getServerResourceUsage';
 import { bytesToString, ip } from '@/lib/formatters';
@@ -73,7 +74,16 @@ const ServerRow = ({ server, className, hideGroup }: { server: Server; className
     const [stats, setStats] = useState<ServerStats | null>(null);
     const rootAdmin = useStoreState((state) => state.user.data?.rootAdmin) ?? false;
     const [editing, setEditing] = useState(false);
-    const [limits, setLimits] = useState({ memory: server.limits.memory, cpu: server.limits.cpu });
+    const [limits, setLimits] = useState({
+        memory: server.limits.memory,
+        cpu: server.limits.cpu,
+        disk: server.limits.disk,
+    });
+    const [deleted, setDeleted] = useState(false);
+    const { data: planInfo } = usePlan();
+    // Admins edit anything; plan users edit servers they own, within their plan.
+    const planOwner = Boolean(planInfo?.plan) && Boolean(server.isOwner);
+    const canEdit = rootAdmin || planOwner;
 
     // Memoized so its identity is stable across renders. Using an inline function
     // here as a useEffect dependency makes the polling effect re-fire every render
@@ -108,8 +118,10 @@ const ServerRow = ({ server, className, hideGroup }: { server: Server; className
     if (stats) {
         alarms.cpu = limits.cpu === 0 ? false : stats.cpuUsagePercent >= limits.cpu * 0.9;
         alarms.memory = isAlarmState(stats.memoryUsageInBytes, limits.memory);
-        alarms.disk = server.limits.disk === 0 ? false : isAlarmState(stats.diskUsageInBytes, server.limits.disk);
+        alarms.disk = limits.disk === 0 ? false : isAlarmState(stats.diskUsageInBytes, limits.disk);
     }
+
+    if (deleted) return null;
 
     return (
         <div className='relative'>
@@ -204,26 +216,26 @@ const ServerRow = ({ server, className, hideGroup }: { server: Server; className
                     )}
                 </div>
             </StatusIndicatorBox>
-            {rootAdmin && (
+            {canEdit && (
                 <>
                     <button
                         type='button'
                         onClick={() => setEditing(true)}
-                        aria-label={`Edit ${server.name} CPU and RAM`}
-                        title='Edit CPU and RAM'
+                        aria-label={`Edit ${server.name} resources`}
+                        title='Edit CPU, RAM and storage'
                         className='absolute top-2 right-2 z-30 rounded-lg border border-[#ffffff11] bg-mocha-500/90 p-1.5 text-cream-400/60 transition hover:bg-mocha-400 hover:text-cream-400'
                     >
                         <Pencil width={14} height={14} fill='currentColor' />
                     </button>
                     {editing && (
                         <QuickBuildDialog
-                            open={editing}
                             onClose={() => setEditing(false)}
                             uuid={server.uuid}
                             name={server.name}
-                            memory={limits.memory}
-                            cpu={limits.cpu}
+                            limits={limits}
+                            plan={rootAdmin ? null : (planInfo ?? null)}
                             onSaved={setLimits}
+                            onDeleted={() => setDeleted(true)}
                         />
                     )}
                 </>

@@ -40,6 +40,15 @@ return [
         'curseforge_api_key' => env('CURSEFORGE_API_KEY'),
     ],
 
+    /*
+    | Limits given to servers users create themselves from their plan.
+    */
+    'self_service' => [
+        'database_limit' => (int) env('SELF_SERVICE_DATABASE_LIMIT', 2),
+        'allocation_limit' => (int) env('SELF_SERVICE_ALLOCATION_LIMIT', 3),
+        'backup_limit' => (int) env('SELF_SERVICE_BACKUP_LIMIT', 3),
+    ],
+
     'marketplace' => [
         'timeout' => (int) env('MARKETPLACE_TIMEOUT', 15),
         'cache_ttl' => (int) env('MARKETPLACE_CACHE_TTL', 120),

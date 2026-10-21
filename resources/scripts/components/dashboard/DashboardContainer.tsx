@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import useSWR from 'swr';
 import useSWRImmutable from 'swr/immutable';
+import { usePlan } from '@/api/account/plan';
 import getFilterOptions, { type FilterOptions } from '@/api/getFilterOptions';
 import getServers from '@/api/getServers';
 
@@ -18,6 +19,7 @@ const EMPTY_FILTER_OPTIONS: FilterOptions = {
 import type { PaginatedResult } from '@/api/http';
 import type { Server } from '@/api/server/getServer';
 import GroupSection from '@/components/dashboard/GroupSection';
+import PlanBar from '@/components/dashboard/plan/PlanBar';
 import ServerRow from '@/components/dashboard/ServerRow';
 import PageContentBlock from '@/components/elements/PageContentBlock';
 import Pagination from '@/components/elements/Pagination';
@@ -261,10 +263,14 @@ const DashboardContainer = () => {
         [sortValue, handleSortChange],
     );
 
-    // Admins: jump straight to the admin "create server" page.
+    const { data: planInfo } = usePlan();
+    const hasPlan = Boolean(planInfo?.plan);
+
+    // Admins without a plan: jump straight to the admin "create server" page.
+    // (Plan users get the GUI creator in the plan bar instead.)
     const newServerButton = useMemo(
         () =>
-            rootAdmin ? (
+            rootAdmin && !hasPlan ? (
                 <a
                     key='new-server'
                     href='/admin/servers/new'
@@ -277,7 +283,7 @@ const DashboardContainer = () => {
                     New server
                 </a>
             ) : null,
-        [rootAdmin],
+        [rootAdmin, hasPlan],
     );
 
     const filterControlsDesktop = useMemo(
@@ -360,6 +366,7 @@ const DashboardContainer = () => {
 
     return (
         <PageContentBlock title={'Dashboard'} showFlashKey={'dashboard'}>
+            <PlanBar />
             {!servers ? null : (
                 <Pagination data={servers} onPageSelect={setPage}>
                     {({ items }) =>

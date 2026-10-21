@@ -102,6 +102,61 @@
             </div>
         </div>
     </form>
+    @php
+        $plan = \Pterodactyl\Models\UserPlan::query()->where('user_id', $user->id)->first();
+        $planUsed = app(\Pterodactyl\Services\SelfService\PlanService::class)->usage($user);
+        $gb = fn ($mib) => rtrim(rtrim(number_format($mib / 1024, 2), '0'), '.');
+    @endphp
+    <div class="col-xs-12">
+        <div class="box box-success">
+            <div class="box-header with-border">
+                <h3 class="box-title">Server Plan</h3>
+            </div>
+            <form action="{{ route('admin.users.plan', $user->id) }}" method="POST">
+                {!! csrf_field() !!}
+                {!! method_field('PATCH') !!}
+                <div class="box-body">
+                    <p class="text-muted"><small>
+                        With a plan, this user can create, resize and delete their own servers from the panel, as long as
+                        the total across all servers they own stays within these limits. Currently using
+                        <strong>{{ $gb($planUsed['memory']) }} GB RAM</strong>,
+                        <strong>{{ rtrim(rtrim(number_format($planUsed['cpu'] / 100, 2), '0'), '.') }} cores</strong>,
+                        <strong>{{ $gb($planUsed['disk']) }} GB storage</strong> across
+                        <strong>{{ $planUsed['servers'] }} server(s)</strong>.
+                    </small></p>
+                    <div class="row">
+                        <div class="form-group col-md-2">
+                            <label class="control-label">Self-service</label>
+                            <select name="plan_enabled" class="form-control">
+                                <option value="0">Off</option>
+                                <option value="1" {{ $plan ? 'selected="selected"' : '' }}>On</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-3">
+                            <label class="control-label">Total RAM (GB)</label>
+                            <input type="number" step="0.5" min="0.5" name="plan_memory_gb" class="form-control" value="{{ $plan ? $gb($plan->memory) : '' }}" placeholder="16">
+                        </div>
+                        <div class="form-group col-md-2">
+                            <label class="control-label">Total CPU cores</label>
+                            <input type="number" step="0.5" min="0.5" name="plan_cpu_cores" class="form-control" value="{{ $plan ? $plan->cpu / 100 : '' }}" placeholder="4">
+                        </div>
+                        <div class="form-group col-md-3">
+                            <label class="control-label">Total storage (GB)</label>
+                            <input type="number" step="1" min="1" name="plan_disk_gb" class="form-control" value="{{ $plan ? $gb($plan->disk) : '' }}" placeholder="100">
+                        </div>
+                        <div class="form-group col-md-2">
+                            <label class="control-label">Max servers</label>
+                            <input type="number" step="1" min="0" name="plan_servers" class="form-control" value="{{ $plan ? $plan->servers : 0 }}">
+                            <p class="text-muted"><small>0 = no limit</small></p>
+                        </div>
+                    </div>
+                </div>
+                <div class="box-footer">
+                    <input type="submit" value="Save Plan" class="btn btn-success btn-sm">
+                </div>
+            </form>
+        </div>
+    </div>
     <div class="col-xs-12">
         <div class="box box-danger">
             <div class="box-header with-border">
