@@ -3,7 +3,6 @@
 namespace Pterodactyl\Http\Controllers\Api\Client\Servers;
 
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Cache;
 use Pterodactyl\Facades\Activity;
 use Pterodactyl\Http\Controllers\Api\Client\ClientApiController;
 use Pterodactyl\Http\Requests\Api\Client\Servers\QuickBuild\DeletePlanServerRequest;
@@ -36,33 +35,32 @@ class QuickBuildController extends ClientApiController
         $cpu = (int) $request->input('cpu');
         $disk = (int) $request->input('disk', $server->disk);
 
-        $lock = Cache::lock('self-service:user:' . $server->owner_id, 60);
-        if (!$lock->block(15)) {
-            throw new HttpException(429, 'Another change to these servers is in progress. Try again in a moment.');
-        }
-        try {
+        $server = PlanService::locked(function () use ($user, $server, $memory, $cpu, $disk) {
+            $server->refresh();
             if (!$user->root_admin) {
                 $plan = $this->plans->plan($user);
                 if ($plan === null) {
                     throw new HttpException(403, 'Your account does not have a server plan.');
                 }
                 $this->plans->assertFits($plan, $user, $memory, $cpu, $disk, $server);
+                $this->plans->assertNodeFits($server, $memory, $disk);
             }
 
             // BuildModificationService resets these limits when they're missing,
             // so pass the current values straight back.
-            $server = $this->builds->handle($server, [
+            return $this->builds->handle($server, [
                 'memory' => $memory,
                 'cpu' => $cpu,
                 'disk' => $disk,
                 'database_limit' => $server->database_limit,
                 'allocation_limit' => $server->allocation_limit,
                 'backup_limit' => $server->backup_limit,
-                'backup_storage_limit' => $server->backup_storage_limit,
+                // Plan servers keep their backup budget tied to their disk size.
+                'backup_storage_limit' => $user->root_admin
+                    ? $server->backup_storage_limit
+                    : PlanService::backupLimitFor($disk),
             ]);
-        } finally {
-            $lock->release();
-        }
+        });
 
         Activity::event('server:settings.quick-build')
             ->property(['old' => $before, 'new' => ['memory' => $memory, 'cpu' => $cpu, 'disk' => $disk]])

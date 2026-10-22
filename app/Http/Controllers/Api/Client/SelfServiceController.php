@@ -118,7 +118,7 @@ class SelfServiceController extends ClientApiController
         $this->requirePlan($request);
         $data = $request->validate([
             'source' => ['nullable', 'in:modrinth,curseforge'],
-            'project_id' => ['required', 'string', 'max:64'],
+            'project_id' => ['required', 'string', 'regex:/\A[A-Za-z0-9]{1,64}\z/'],
         ]);
 
         return new JsonResponse(['versions' => $this->source($data['source'] ?? null)->versions($data['project_id'])]);

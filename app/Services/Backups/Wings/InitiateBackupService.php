@@ -114,6 +114,18 @@ class InitiateBackupService
             $this->deleteBackupService->handle($oldest);
         }
 
+        // Enforce the per-server backup storage budget (MiB) when one is set.
+        if ($server->backup_storage_limit !== null && $server->backup_storage_limit > 0) {
+            $used = (int) $this->repository->getNonFailedBackups($server)->sum('bytes');
+            if ($used >= $server->backup_storage_limit * 1024 * 1024) {
+                throw new \Pterodactyl\Exceptions\DisplayException(sprintf(
+                    'Backup storage is full (%.1f of %.1f GB). Delete an old backup first.',
+                    $used / 1073741824,
+                    $server->backup_storage_limit / 1024,
+                ));
+            }
+        }
+
         return $this->connection->transaction(function () use ($server, $name) {
             $disk = BackupAdapter::tryFrom($server->node->backupDisk);
             $adapter = in_array($disk, [BackupAdapter::Wings, BackupAdapter::S3], true)

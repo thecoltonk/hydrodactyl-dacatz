@@ -25,8 +25,63 @@ class PlanService
 
     public const MIN_DISK = 1024;
 
+    /**
+     * One lock for every self-service create/resize, across all users. It keeps
+     * two requests from both passing the quota check, and two new servers from
+     * grabbing the same free port.
+     */
+    public const LOCK = 'self-service:plans';
+
+    /** Backups of a self-service server may use up to this share of its disk. */
+    public const BACKUP_SHARE = 0.5;
+
+    public static function backupLimitFor(int $disk): int
+    {
+        return max(1024, (int) floor($disk * self::BACKUP_SHARE));
+    }
+
     public function __construct(private ServerCreationService $creation)
     {
+    }
+
+    /**
+     * Run $callback while holding the global self-service lock.
+     *
+     * @template T
+     *
+     * @param callable(): T $callback
+     *
+     * @return T
+     */
+    public static function locked(callable $callback): mixed
+    {
+        try {
+            return Cache::lock(self::LOCK, 90)->block(15, $callback);
+        } catch (\Illuminate\Contracts\Cache\LockTimeoutException) {
+            throw new HttpException(429, 'Another server change is in progress. Try again in a moment.');
+        }
+    }
+
+    /**
+     * A plan user growing a server must still fit on its node (plans across
+     * users can add up to more than the machine has).
+     */
+    public function assertNodeFits(Server $server, int $memory, int $disk): void
+    {
+        $node = $server->node;
+        if ($node === null) {
+            return;
+        }
+        $others = Server::query()->where('node_id', $node->id)->where('id', '!=', $server->id)
+            ->where('exclude_from_resource_calculation', false);
+        $memoryFree = (int) ($node->memory * (1 + $node->memory_overallocate / 100)) - (int) (clone $others)->sum('memory');
+        $diskFree = (int) ($node->disk * (1 + $node->disk_overallocate / 100)) - (int) (clone $others)->sum('disk');
+        if ($memory > $server->memory && $memory > $memoryFree) {
+            throw new HttpException(422, sprintf('The machine this server runs on only has %s GB RAM left for it.', self::gb(max(0, $memoryFree))));
+        }
+        if ($disk > $server->disk && $disk > $diskFree) {
+            throw new HttpException(422, sprintf('The machine this server runs on only has %s GB storage left for it.', self::gb(max(0, $diskFree))));
+        }
     }
 
     public function plan(User $user): ?UserPlan
@@ -112,11 +167,7 @@ class PlanService
             throw new HttpException(403, 'Your account does not have a server plan.');
         }
 
-        $lock = Cache::lock('self-service:user:' . $user->id, 60);
-        if (!$lock->block(15)) {
-            throw new HttpException(429, 'Another change to your servers is in progress. Try again in a moment.');
-        }
-        try {
+        return self::locked(function () use ($plan, $user, $name, $eggId, $memory, $cpu, $disk, $template) {
             $this->assertFits($plan, $user, $memory, $cpu, $disk);
 
             $egg = Egg::query()->with('variables')->find($eggId);
@@ -161,12 +212,10 @@ class PlanService
                 'database_limit' => (int) config('hydrodactyl.self_service.database_limit', 2),
                 'allocation_limit' => (int) config('hydrodactyl.self_service.allocation_limit', 3),
                 'backup_limit' => (int) config('hydrodactyl.self_service.backup_limit', 3),
-                'backup_storage_limit' => null,
+                'backup_storage_limit' => self::backupLimitFor($disk),
                 'start_on_completion' => false,
             ]);
-        } finally {
-            $lock->release();
-        }
+        });
     }
 
     /**
@@ -178,6 +227,11 @@ class PlanService
         $reasons = [];
         $candidates = [];
         foreach (Node::query()->get() as $node) {
+            // "Allow Automatic Allocation = No" keeps a node out of self-service.
+            if (!$node->public) {
+                $reasons[] = $node->name . ' does not allow automatic allocation';
+                continue;
+            }
             if ($node->maintenance_mode) {
                 $reasons[] = $node->name . ' is in maintenance mode';
                 continue;
