@@ -347,6 +347,15 @@ class CurseForgeModpacks
         }
     }
 
+    /**
+     * edge.forgecdn.net only redirects to mediafilez.forgecdn.net, and some
+     * daemons (Elytra) don't follow redirects, so point straight at the file.
+     */
+    public static function directCdnUrl(string $url): string
+    {
+        return preg_replace('#^https://edge\.forgecdn\.net/#', 'https://mediafilez.forgecdn.net/', $url) ?? $url;
+    }
+
     private function downloadUrl(mixed $file): ?string
     {
         $url = is_array($file) ? ($file['downloadUrl'] ?? null) : null;
@@ -358,7 +367,7 @@ class CurseForgeModpacks
         $parts = parse_url($url);
 
         return is_array($parts) && ($parts['scheme'] ?? null) === 'https' && in_array($parts['host'] ?? null, self::FILE_HOSTS, true)
-            && !isset($parts['user']) && !isset($parts['port']) && strlen($url) <= 2048 ? $url : null;
+            && !isset($parts['user']) && !isset($parts['port']) && strlen($url) <= 2048 ? self::directCdnUrl($url) : null;
     }
 
     private function assertId(string $id): void

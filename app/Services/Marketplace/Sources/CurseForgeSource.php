@@ -165,8 +165,12 @@ class CurseForgeSource extends AbstractMarketplaceSource
             throw MarketplaceException::user($this->key(), 'This CurseForge file is not a jar and cannot be installed here.');
         }
 
-        // CurseForge returns paths with unencoded spaces.
-        $url = str_replace(' ', '%20', $url);
+        // CurseForge returns paths with unencoded spaces, and its edge CDN
+        // redirects. The daemon may not follow redirects, so hand it the
+        // final URL (still restricted to CurseForge's CDN hosts).
+        $url = CurseForgeModpacks::directCdnUrl(str_replace(' ', '%20', $url));
+        $this->assertSafeDownloadUrl($url, CurseForgeModpacks::FILE_HOSTS);
+        $url = $this->followRedirect($url);
         $this->assertSafeDownloadUrl($url, CurseForgeModpacks::FILE_HOSTS);
 
         return [
