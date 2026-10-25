@@ -51,6 +51,12 @@ class SubuserCreationService
                     throw new ServerSubuserExistsException(trans('exceptions.subusers.subuser_exists'));
                 }
             } catch (RecordNotFoundException) {
+                // Without email the invited person could never set a password, so
+                // only existing accounts can be added unless mail is enabled.
+                if (!config('mail.default') || config('mail.default') === 'log') {
+                    throw new \Pterodactyl\Exceptions\DisplayException('There is no account with that email yet. Ask an admin to create one first, then add it here.');
+                }
+
                 // Just cap the username generated at 64 characters at most and then append a random string
                 // to the end to make it "unique"...
                 $username = substr(preg_replace('/([^\w\.-]+)/', '', strtok($email, '@')), 0, 64) . Str::random(3);

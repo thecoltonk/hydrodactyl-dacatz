@@ -22,6 +22,9 @@ class NewUserFormRequest extends AdminFormRequest
             'password',
             'language',
             'root_admin',
+        ])->merge([
+            // No email is sent, so the password can't be set by the user later.
+            'password' => ['required', 'string', 'min:8'],
         ])->toArray();
     }
 }

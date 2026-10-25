@@ -11,8 +11,6 @@ import { BRAND_NAME } from '@/lib/branding';
 import CaptchaManager from '@/lib/captcha';
 import useFlash from '@/plugins/useFlash';
 
-import SecondaryLink from '../ui/secondary-link';
-
 interface Values {
     user: string;
     password: string;
@@ -133,9 +131,9 @@ function LoginContainer() {
                         >
                             Sign in
                         </Button>
-                        <SecondaryLink to='/auth/password' className='text-center sm:text-right'>
-                            Forgot your password?
-                        </SecondaryLink>
+                        <span className='text-center text-xs text-secondary sm:text-right'>
+                            Forgot your password? Ask an admin to reset it.
+                        </span>
                     </div>
                 </LoginFormContainer>
             )}

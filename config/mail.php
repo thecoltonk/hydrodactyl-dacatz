@@ -12,7 +12,9 @@ return [
     |
     */
 
-    'default' => env('MAIL_MAILER', env('MAIL_DRIVER', 'smtp')),
+    // Da Catz: this panel has no mail server, so emails are only written to the
+    // log unless MAIL_ENABLED=true is set (then the normal mailer is used).
+    'default' => env('MAIL_ENABLED', false) ? env('MAIL_MAILER', env('MAIL_DRIVER', 'smtp')) : 'log',
 
     /*
     |--------------------------------------------------------------------------
