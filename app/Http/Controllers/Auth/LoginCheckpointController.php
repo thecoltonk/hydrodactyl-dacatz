@@ -47,7 +47,8 @@ class LoginCheckpointController extends AbstractLoginController
         }
 
         $details = $request->session()->get('auth_confirmation_token');
-        if (!$this->hasValidSessionData($details)) {
+        // A missing session (cookie dropped or expired) used to crash with a 500.
+        if (!is_array($details) || !$this->hasValidSessionData($details)) {
             $this->sendFailedLoginResponse($request, null, self::TOKEN_EXPIRED_MESSAGE);
         }
 
