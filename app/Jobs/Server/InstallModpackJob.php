@@ -158,6 +158,10 @@ class InstallModpackJob extends Job implements ShouldQueue
         } catch (\Throwable $exception) {
             Log::error('Modpack install failed', ['server_id' => $this->server->id, 'error' => $exception->getMessage()]);
             $operation->markAsFailed('Modpack install failed: ' . $exception->getMessage());
+            try {
+                \Pterodactyl\Services\Discord\DiscordNotifier::modpackFailed($this->server, (string) ($this->plan['title'] ?? 'modpack'));
+            } catch (\Throwable) {
+            }
             throw $exception;
         }
     }

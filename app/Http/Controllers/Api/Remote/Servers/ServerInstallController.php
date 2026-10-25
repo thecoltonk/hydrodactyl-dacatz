@@ -2,6 +2,7 @@
 
 namespace Pterodactyl\Http\Controllers\Api\Remote\Servers;
 
+use Pterodactyl\Services\Discord\DiscordNotifier;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -63,6 +64,12 @@ class ServerInstallController extends Controller
         }
 
         $this->repository->update($server->id, ['status' => $status, 'installed_at' => CarbonImmutable::now()], true, true);
+
+        try {
+            DiscordNotifier::installFinished($server, $request->boolean('successful'), !is_null($server->installed_at));
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
 
         // If the server successfully installed, fire installed event.
         // This logic allows individually disabling install and reinstall notifications separately.

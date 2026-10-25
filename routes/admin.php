@@ -70,6 +70,8 @@ Route::group(['prefix' => 'settings'], function () {
     Route::get('/mail', [Admin\Settings\MailController::class, 'index'])->name('admin.settings.mail');
     Route::get('/advanced', [Admin\Settings\AdvancedController::class, 'index'])->name('admin.settings.advanced');
     Route::get('/captcha', [Admin\Settings\CaptchaController::class, 'index'])->name('admin.settings.captcha');
+    Route::get('/discord', [Admin\Settings\DiscordController::class, 'index'])->name('admin.settings.discord');
+    Route::post('/discord/test', [Admin\Settings\DiscordController::class, 'test'])->middleware('throttle:6,1')->name('admin.settings.discord.test');
     Route::get('/custom-navigation', [Admin\Settings\CustomNavigationController::class, 'index'])->name('admin.settings.custom-navigation');
     Route::get('/logo', [Admin\Settings\LogoController::class, 'index'])->name('admin.settings.logo');
 
@@ -92,6 +94,7 @@ Route::group(['prefix' => 'settings'], function () {
     Route::patch('/mail', [Admin\Settings\MailController::class, 'update']);
     Route::patch('/advanced', [Admin\Settings\AdvancedController::class, 'update']);
     Route::patch('/captcha', [Admin\Settings\CaptchaController::class, 'update']);
+    Route::patch('/discord', [Admin\Settings\DiscordController::class, 'update']);
     Route::patch('/custom-navigation', [Admin\Settings\CustomNavigationController::class, 'update']);
     Route::patch('/logo', [Admin\Settings\LogoController::class, 'update']);
 });

@@ -42,6 +42,13 @@ class SettingsServiceProvider extends ServiceProvider
     'pterodactyl:captcha:cap:site_key',
     'pterodactyl:captcha:cap:secret_key',
     'pterodactyl:captcha:cap:server_url',
+    'hydrodactyl:discord:enabled',
+    'hydrodactyl:discord:application_id',
+    'hydrodactyl:discord:public_key',
+    'hydrodactyl:discord:bot_token',
+    'hydrodactyl:discord:client_secret',
+    'hydrodactyl:discord:channel_id',
+    'hydrodactyl:discord:invite_url',
   ];
 
 
@@ -69,6 +76,8 @@ class SettingsServiceProvider extends ServiceProvider
     'pterodactyl:captcha:hcaptcha:secret_key',
     'pterodactyl:captcha:recaptcha:secret_key',
     'pterodactyl:captcha:cap:secret_key',
+    'hydrodactyl:discord:bot_token',
+    'hydrodactyl:discord:client_secret',
   ];
 
   /**

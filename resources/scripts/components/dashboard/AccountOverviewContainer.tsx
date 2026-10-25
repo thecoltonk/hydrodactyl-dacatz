@@ -1,5 +1,6 @@
 import { useLocation } from 'react-router-dom';
 import ConfigureTwoFactorForm from '@/components/dashboard/forms/ConfigureTwoFactorForm';
+import DiscordLinkForm from '@/components/dashboard/forms/DiscordLinkForm';
 import UpdateEmailAddressForm from '@/components/dashboard/forms/UpdateEmailAddressForm';
 import UpdatePasswordForm from '@/components/dashboard/forms/UpdatePasswordForm';
 import ContentBox from '@/components/elements/ContentBox';
@@ -57,6 +58,9 @@ const AccountOverviewContainer = () => {
                             </ContentBox>
                             <ContentBox title={'Multi-Factor Authentication'}>
                                 <ConfigureTwoFactorForm />
+                            </ContentBox>
+                            <ContentBox title={'Discord'}>
+                                <DiscordLinkForm />
                             </ContentBox>
                         </div>
                     </div>

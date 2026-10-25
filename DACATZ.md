@@ -14,6 +14,11 @@ Hydrodactyl v6.4.1 plus:
   user → Server Plan). That user can then create, resize and delete their own servers from the
   dashboard within those totals. Admins also get a pencil on every server to resize it freely.
 - **Da Catz branding**: login screen and optional background art.
+- **Discord bot** (Admin → Settings → Discord): staff feed channel for server lifecycle,
+  failures and security events (no pings, no IPs/emails; admin logins are not posted), and
+  account linking (Account → Discord) so users get DMs about their own servers and account.
+  REST only, so nothing extra to run; the token and OAuth secret are stored encrypted.
+- **No email**: mail is logged unless `MAIL_ENABLED=true`; admins set passwords.
 
 CurseForge needs `CURSEFORGE_API_KEY` in the panel's compose environment (write every `$` as `$$`).
 

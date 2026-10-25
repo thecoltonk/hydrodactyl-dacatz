@@ -37,6 +37,10 @@ return [
             'create' => 'Enabled two-factor auth',
             'delete' => 'Disabled two-factor auth',
         ],
+        'discord' => [
+            'linked' => 'Linked Discord account :discord',
+            'unlinked' => 'Unlinked Discord account',
+        ],
     ],
     'server' => [
         'reinstall' => 'Reinstalled server',

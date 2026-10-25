@@ -223,6 +223,14 @@ class ElytraJobService
             $handler->processStatusUpdate($job, $statusData);
         }
 
+        if ($newStatus === 'failed' && $currentStatus !== 'failed' && $server !== null) {
+            try {
+                \Pterodactyl\Services\Discord\DiscordNotifier::jobFailed($server, (string) $job->job_type);
+            } catch (\Throwable $exception) {
+                report($exception);
+            }
+        }
+
         Log::info('Job status updated', [
             'job_id' => $job->uuid,
             'elytra_job_id' => $elytraJobId,

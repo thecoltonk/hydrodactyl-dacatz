@@ -103,4 +103,24 @@ return [
             'plugin' => 'plugins',
         ],
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Discord bot
+    |--------------------------------------------------------------------------
+    |
+    | Set from Admin -> Settings -> Discord. The panel talks to Discord over
+    | its REST API only (no gateway connection), so there is no separate bot
+    | process to run.
+    */
+    'discord' => [
+        'enabled' => env('DISCORD_ENABLED', false),
+        'application_id' => env('DISCORD_APPLICATION_ID', ''),
+        'public_key' => env('DISCORD_PUBLIC_KEY', ''),
+        'bot_token' => env('DISCORD_BOT_TOKEN', ''),
+        'client_secret' => env('DISCORD_CLIENT_SECRET', ''),
+        'channel_id' => env('DISCORD_CHANNEL_ID', ''),
+        'invite_url' => env('DISCORD_INVITE_URL', ''),
+        'brand' => env('DISCORD_BRAND', 'Da Catz Hosting'),
+    ],
 ];

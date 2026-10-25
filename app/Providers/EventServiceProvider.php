@@ -3,6 +3,10 @@
 namespace Pterodactyl\Providers;
 
 use Pterodactyl\Models\User;
+use Pterodactyl\Models\Server;
+use Pterodactyl\Events\ActivityLogged;
+use Pterodactyl\Observers\DiscordServerObserver;
+use Pterodactyl\Listeners\Discord\DiscordActivityListener;
 use Pterodactyl\Models\Subuser;
 use Pterodactyl\Models\EggVariable;
 use Pterodactyl\Observers\UserObserver;
@@ -20,6 +24,7 @@ class EventServiceProvider extends ServiceProvider
      */
     protected $listen = [
         ServerInstalledEvent::class => [ServerInstalledNotification::class],
+        ActivityLogged::class => [DiscordActivityListener::class],
     ];
 
     protected $subscribe = [
@@ -36,5 +41,6 @@ class EventServiceProvider extends ServiceProvider
         User::observe(UserObserver::class);
         Subuser::observe(SubuserObserver::class);
         EggVariable::observe(EggVariableObserver::class);
+        Server::observe(DiscordServerObserver::class);
     }
 }
