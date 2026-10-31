@@ -10,6 +10,7 @@ use Pterodactyl\Http\Middleware\TrimStrings;
 use Illuminate\Session\Middleware\StartSession;
 use Pterodactyl\Http\Middleware\EncryptCookies;
 use Pterodactyl\Http\Middleware\Api\IsValidJson;
+use Pterodactyl\Http\Middleware\Api\VerifyCookieRequestOrigin;
 use Pterodactyl\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Pterodactyl\Http\Middleware\LanguageMiddleware;
@@ -70,6 +71,7 @@ class Kernel extends HttpKernel
             /* StartSession::class, */
             /* EnsureStatefulRequests::class, */
             'auth:sanctum',
+            VerifyCookieRequestOrigin::class,
             IsValidJson::class,
             TrackAPIKey::class,
             RequireTwoFactorAuthentication::class,
