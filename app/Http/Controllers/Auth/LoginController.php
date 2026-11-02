@@ -82,4 +82,21 @@ class LoginController extends AbstractLoginController
             ],
         ]);
     }
+
+    /**
+     * Sign out this browser only. The default logout rotates the account's
+     * remember token, which signs out every other device and every person
+     * sharing the account: their API calls start failing with
+     * "Unauthenticated" until they log in again (and their logout then kicks
+     * everyone else). Password changes still sign out other devices.
+     */
+    public function logout(Request $request): JsonResponse|\Illuminate\Http\RedirectResponse
+    {
+        $this->auth->guard()->logoutCurrentDevice();
+
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return $request->wantsJson() ? new JsonResponse([], 204) : redirect('/');
+    }
 }

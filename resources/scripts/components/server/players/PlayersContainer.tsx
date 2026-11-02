@@ -40,9 +40,10 @@ const SHOW_OFFLINE_KEY = 'hydrodactyl:players:show-offline';
 
 const readShowOffline = () => {
     try {
-        return window.localStorage.getItem(SHOW_OFFLINE_KEY) === '1';
+        // On unless the user turned it off.
+        return window.localStorage.getItem(SHOW_OFFLINE_KEY) !== '0';
     } catch {
-        return false;
+        return true;
     }
 };
 
@@ -297,6 +298,24 @@ const PlayersContainer = () => {
                             </p>
                         </div>
                         <div className='mcp-toolbar-actions'>
+                            {capabilities.inventory && (
+                                <fieldset className='mcp-segment' aria-label='Which players to show'>
+                                    <button
+                                        type='button'
+                                        aria-pressed={!showOffline}
+                                        onClick={() => setShowOffline(false)}
+                                    >
+                                        Online
+                                    </button>
+                                    <button
+                                        type='button'
+                                        aria-pressed={showOffline}
+                                        onClick={() => setShowOffline(true)}
+                                    >
+                                        Everyone
+                                    </button>
+                                </fieldset>
+                            )}
                             <label className='mcp-search' htmlFor='mcp-search'>
                                 {icon(Magnifier, 17)}
                                 <Input.Text
@@ -306,7 +325,7 @@ const PlayersContainer = () => {
                                     placeholder='Search players…'
                                     value={search}
                                     onChange={(event) => setSearch(event.target.value)}
-                                    disabled={!players.length}
+                                    disabled={!players.length && !showOffline}
                                 />
                             </label>
                             <Button
@@ -451,16 +470,6 @@ const PlayersContainer = () => {
                             {updated ? `Last checked at ${updated}` : 'No result yet'}
                             {available && search.trim() ? ` · Showing ${filtered.length} of ${players.length}` : ''}
                         </span>
-                        {capabilities.inventory && (
-                            <label htmlFor='mcp-show-offline'>
-                                <Input.Checkbox
-                                    id='mcp-show-offline'
-                                    checked={showOffline}
-                                    onChange={(event) => setShowOffline(event.target.checked)}
-                                />
-                                <span>Show offline players</span>
-                            </label>
-                        )}
                         <label htmlFor='mcp-auto-refresh'>
                             <Input.Checkbox
                                 id='mcp-auto-refresh'
