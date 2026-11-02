@@ -2,6 +2,12 @@
 .mcp-page {
     color: var(--color-cream-400, #fff1e0);
 }
+/* The page is a fixed-height flex column. Without this the player list (which
+   clips its overflow) is the only child allowed to shrink, so it collapsed to
+   a thin line on phones and cut off players on desktop. Let the page scroll. */
+.mcp-page > * {
+    flex-shrink: 0;
+}
 .mcp-header,
 .mcp-heading,
 .mcp-header-actions,
