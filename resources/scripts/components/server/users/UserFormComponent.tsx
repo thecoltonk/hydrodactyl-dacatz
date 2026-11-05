@@ -3,6 +3,7 @@ import { type Actions, useStoreActions, useStoreState } from 'easy-peasy';
 import { Form, Formik } from 'formik';
 import { useEffect } from 'react';
 import { array, object, string } from 'yup';
+import { useDiscordLink } from '@/api/account/discord';
 import createOrUpdateSubuser from '@/api/server/users/createOrUpdateSubuser';
 import Can from '@/components/elements/Can';
 import Field from '@/components/elements/Field';
@@ -17,6 +18,7 @@ import type { Subuser } from '@/state/server/subusers';
 
 interface Values {
     email: string;
+    discord: string;
     permissions: string[];
 }
 
@@ -56,6 +58,7 @@ const UserFormComponent = ({ subuser, onSuccess, onCancel, flashKey, isSubmittin
     const permissions = useStoreState((state) => state.permissions.data);
     const loggedInPermissions = ServerContext.useStoreState((state) => state.server.permissions);
     const [canEditUser] = usePermissions(subuser ? ['user.update'] : ['user.create']);
+    const discordInvites = Boolean(useDiscordLink().data?.invites);
 
     const editablePermissions = useDeepCompareMemo(() => {
         const list = Object.keys(permissions).flatMap((key) =>
@@ -68,10 +71,16 @@ const UserFormComponent = ({ subuser, onSuccess, onCancel, flashKey, isSubmittin
     }, [isRootAdmin, permissions, loggedInPermissions]);
 
     const submit = async (values: Values) => {
+        if (!uuid) return;
         if (setIsSubmitting) setIsSubmitting(true);
         clearFlashes(flashKey);
         try {
-            const created = await createOrUpdateSubuser(uuid, values, subuser);
+            const { discord, ...rest } = values;
+            const created = await createOrUpdateSubuser(
+                uuid,
+                discordInvites && discord.trim() ? { ...rest, discord: discord.trim() } : rest,
+                subuser,
+            );
             appendSubuser(created);
             onSuccess(created);
         } catch (error) {
@@ -125,6 +134,7 @@ const UserFormComponent = ({ subuser, onSuccess, onCancel, flashKey, isSubmittin
                 initialValues={
                     {
                         email: subuser?.email || '',
+                        discord: '',
                         permissions: subuser?.permissions || [],
                     } as Values
                 }
@@ -133,6 +143,7 @@ const UserFormComponent = ({ subuser, onSuccess, onCancel, flashKey, isSubmittin
                         .max(191, 'Email addresses must not exceed 191 characters.')
                         .email('A valid email address must be provided.')
                         .required('A valid email address must be provided.'),
+                    discord: string().max(64, 'Discord usernames are at most 64 characters.'),
                     permissions: array().of(string()),
                 })}
             >
@@ -160,6 +171,15 @@ const UserFormComponent = ({ subuser, onSuccess, onCancel, flashKey, isSubmittin
                                         label='Email Address'
                                         description='Enter the email address of the user you wish to invite as a subuser for this server.'
                                     />
+                                    {discordInvites && (
+                                        <div className='mt-5'>
+                                            <Field
+                                                name='discord'
+                                                label='Discord username'
+                                                description="Only needed if they don't have a panel account yet: the bot DMs them a link to set their password. They must be in the Discord server."
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                             )}
 

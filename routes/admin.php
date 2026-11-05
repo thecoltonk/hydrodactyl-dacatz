@@ -117,6 +117,7 @@ Route::group(['prefix' => 'users'], function () {
 
     Route::patch('/view/{user:id}', [Admin\UserController::class, 'update']);
     Route::patch('/view/{user:id}/plan', [Admin\UserPlanController::class, 'update'])->name('admin.users.plan');
+    Route::post('/view/{user:id}/discord-invite', [Admin\UserController::class, 'discordInvite'])->middleware('throttle:10,1')->name('admin.users.discord-invite');
     Route::delete('/view/{user:id}', [Admin\UserController::class, 'delete']);
 });
 

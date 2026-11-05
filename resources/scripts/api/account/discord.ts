@@ -8,6 +8,8 @@ export interface DiscordLinkInfo {
     linked: boolean;
     username: string | null;
     invite_url: string | null;
+    /** New accounts are invited by Discord DM instead of email. */
+    invites?: boolean;
 }
 
 export const useDiscordLink = () =>

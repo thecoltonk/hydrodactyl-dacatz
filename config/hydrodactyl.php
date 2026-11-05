@@ -122,5 +122,7 @@ return [
         'channel_id' => env('DISCORD_CHANNEL_ID', ''),
         'invite_url' => env('DISCORD_INVITE_URL', ''),
         'brand' => env('DISCORD_BRAND', 'Da Catz Hosting'),
+        // How account invites go out: 'email' or 'discord' (DM a setup link).
+        'invites' => env('DISCORD_INVITES', 'email'),
     ],
 ];

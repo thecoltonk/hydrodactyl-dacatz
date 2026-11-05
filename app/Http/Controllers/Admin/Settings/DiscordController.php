@@ -52,6 +52,7 @@ class DiscordController extends Controller
             'client_secret' => 'nullable|string|min:20|max:100',
             'channel_id' => ['nullable', 'regex:/\A\d{15,22}\z/'],
             'invite_url' => ['nullable', 'url', 'regex:/\Ahttps:\/\/(discord\.gg|discord\.com\/invite)\//'],
+            'invites' => 'required|in:email,discord',
         ], [
             'application_id.regex' => 'The Application ID is the long number on the General Information page.',
             'public_key.regex' => 'The Public Key is 64 hex characters, on the General Information page.',
@@ -66,7 +67,7 @@ class DiscordController extends Controller
         }
 
         $this->settings->set(self::PREFIX . 'enabled', $data['enabled']);
-        foreach (['application_id', 'public_key', 'channel_id', 'invite_url'] as $key) {
+        foreach (['application_id', 'public_key', 'channel_id', 'invite_url', 'invites'] as $key) {
             $this->settings->set(self::PREFIX . $key, trim((string) ($data[$key] ?? '')));
         }
         // Secrets: blank keeps the saved value; they are never sent back to the browser.

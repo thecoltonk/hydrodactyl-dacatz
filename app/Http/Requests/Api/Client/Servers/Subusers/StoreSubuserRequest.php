@@ -15,6 +15,7 @@ class StoreSubuserRequest extends SubuserRequest
     {
         return [
             'email' => 'required|email|between:1,191',
+            'discord' => 'nullable|string|max:64',
             'permissions' => 'required|array',
             'permissions.*' => 'string',
         ];

@@ -7,6 +7,8 @@ import type { Subuser } from '@/state/server/subusers';
 interface Params {
     email: string;
     permissions: string[];
+    /** Discord username, for inviting someone without an account by DM. */
+    discord?: string;
 }
 
 export default (uuid: string, params: Params, subuser?: Subuser): Promise<Subuser> => {

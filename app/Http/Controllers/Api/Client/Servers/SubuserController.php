@@ -67,7 +67,8 @@ class SubuserController extends ClientApiController
         $response = $this->creationService->handle(
             $server,
             $request->input('email'),
-            $this->getDefaultPermissions($request)
+            $this->getDefaultPermissions($request),
+            $request->input('discord'),
         );
 
         Activity::event('server:subuser.create')

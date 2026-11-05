@@ -67,6 +67,63 @@ class DiscordClient
     }
 
     /**
+     * The Discord server (guild) the feed channel belongs to. Member lookups
+     * for invites happen there.
+     *
+     * @throws DiscordException
+     */
+    public function guildId(): string
+    {
+        $channel = trim((string) config('hydrodactyl.discord.channel_id'));
+        if ($channel === '') {
+            throw new DiscordException('Set the feed channel in Admin -> Settings -> Discord first.', permanent: true);
+        }
+
+        return Cache::remember('discord:guild:' . $channel, now()->addDay(), function () use ($channel) {
+            $response = $this->http()->get(self::API . '/channels/' . $channel);
+            $this->check($response);
+            $guild = (string) $response->json('guild_id');
+            if (!preg_match('/\A\d{15,22}\z/', $guild)) {
+                throw new DiscordException('The feed channel is not in a Discord server.', permanent: true);
+            }
+
+            return $guild;
+        });
+    }
+
+    /**
+     * Members whose username or server nickname starts with $query.
+     *
+     * @throws DiscordException
+     */
+    public function searchMembers(string $query): array
+    {
+        $response = $this->http()->get(self::API . '/guilds/' . $this->guildId() . '/members/search', [
+            'query' => $query,
+            'limit' => 20,
+        ]);
+        $this->check($response);
+
+        return array_values(array_filter((array) $response->json(), 'is_array'));
+    }
+
+    /**
+     * One member by user ID, or null if they're not in the server.
+     *
+     * @throws DiscordException
+     */
+    public function member(string $userId): ?array
+    {
+        $response = $this->http()->get(self::API . '/guilds/' . $this->guildId() . '/members/' . $userId);
+        if ($response->status() === 404) {
+            return null;
+        }
+        $this->check($response);
+
+        return (array) $response->json();
+    }
+
+    /**
      * @throws DiscordException
      */
     private function dmChannel(string $userId): string

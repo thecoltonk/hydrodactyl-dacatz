@@ -49,6 +49,7 @@ class SettingsServiceProvider extends ServiceProvider
     'hydrodactyl:discord:client_secret',
     'hydrodactyl:discord:channel_id',
     'hydrodactyl:discord:invite_url',
+    'hydrodactyl:discord:invites',
   ];
 
 

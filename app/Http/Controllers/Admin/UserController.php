@@ -5,6 +5,7 @@ namespace Pterodactyl\Http\Controllers\Admin;
 use Illuminate\View\View;
 use Illuminate\Http\Request;
 use Pterodactyl\Models\User;
+use Pterodactyl\Services\Discord\DiscordInvites;
 use Pterodactyl\Models\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Http\RedirectResponse;
@@ -121,9 +122,63 @@ public function index(Request $request): View
     {
         // Validate the optional server plan before creating anything.
         $request->validate(UserPlanController::rules());
-        $user = $this->creationService->handle($request->normalize());
+
+        // Discord invite: find them before creating the account so a typo fails cleanly.
+        $member = null;
+        $discord = trim((string) $request->input('discord'));
+        if ($discord !== '' && DiscordInvites::enabled()) {
+            $member = DiscordInvites::findMember($discord);
+            if (User::query()->where('discord_id', $member['id'])->exists()) {
+                throw new DisplayException('That Discord account is already linked to another panel user.');
+            }
+        }
+
+        $data = $request->normalize();
+        unset($data['discord']);
+        $user = $this->creationService->handle($data);
         UserPlanController::apply($request, $user);
-        $this->alert->success($this->translator->get('admin/user.notices.account_created'))->flash();
+
+        if ($member !== null) {
+            DiscordInvites::link($user, $member);
+            try {
+                DiscordInvites::sendSetupLink($user, $member, 'An admin made you an account.');
+                $this->alert->success('Account created. The bot DMed ' . e($member['username']) . ' a link to set their password.')->flash();
+            } catch (DisplayException $exception) {
+                $this->alert->warning(e($exception->getMessage()))->flash();
+            }
+        } else {
+            $this->alert->success($this->translator->get('admin/user.notices.account_created'))->flash();
+        }
+
+        return redirect()->route('admin.users.view', $user->id);
+    }
+
+    /**
+     * Link a user's Discord (if not yet) and DM them a fresh setup / reset link.
+     */
+    public function discordInvite(Request $request, User $user): RedirectResponse
+    {
+        if (!DiscordInvites::enabled()) {
+            throw new DisplayException('Turn on Discord invites in Settings -> Discord first.');
+        }
+
+        if ($user->discord_id) {
+            $member = ['id' => $user->discord_id, 'username' => (string) ($user->discord_username ?? $user->discord_id)];
+        } else {
+            $request->validate(['discord' => 'required|string|max:64']);
+            $member = DiscordInvites::findMember((string) $request->input('discord'));
+            if (User::query()->where('discord_id', $member['id'])->where('id', '!=', $user->id)->exists()) {
+                throw new DisplayException('That Discord account is already linked to another panel user.');
+            }
+            DiscordInvites::link($user, $member);
+        }
+
+        try {
+            DiscordInvites::sendSetupLink($user, $member, 'Here is a link to set your panel password.');
+            $this->alert->success('Sent ' . e($member['username']) . ' a link to set their password.')->flash();
+        } catch (DisplayException $exception) {
+            $this->alert->danger(e($exception->getMessage()))->flash();
+        }
 
         return redirect()->route('admin.users.view', $user->id);
     }

@@ -92,6 +92,16 @@
               </div>
             </div>
             <div class="row">
+              <div class="form-group col-md-6">
+                <label class="control-label">Send account invites by</label>
+                <select name="invites" class="form-control">
+                  <option value="email" @if(config('hydrodactyl.discord.invites') !== 'discord') selected @endif>Email</option>
+                  <option value="discord" @if(config('hydrodactyl.discord.invites') === 'discord') selected @endif>Discord DM</option>
+                </select>
+                <p class="text-muted small">Discord DM: when someone is added to a server (or you create a user) without an existing account, the bot DMs them a link to set their password. You still enter their email. Needs <strong>Server Members Intent</strong> turned on for this bot so it can find people by username.</p>
+              </div>
+            </div>
+            <div class="row">
               <div class="col-md-12">
                 <div class="alert alert-info" style="margin-bottom: 0;">
                   <strong>Developer Portal setup</strong>

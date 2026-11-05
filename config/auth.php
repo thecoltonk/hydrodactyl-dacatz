@@ -109,7 +109,8 @@ return [
         'users' => [
             'provider' => 'users',
             'table' => 'password_resets',
-            'expire' => 60,
+            // Also used for Discord invite links, which people may not open right away.
+            'expire' => 1440,
             'throttle' => 60,
         ],
     ],

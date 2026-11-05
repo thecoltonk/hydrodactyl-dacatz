@@ -9,6 +9,8 @@ import useFileManagerSwr from '@/plugins/useFileManagerSwr';
 import { useFlashKey } from '@/plugins/useFlash';
 import { ServerContext } from '@/state/server';
 
+const UPLOAD_CONCURRENCY = 3;
+
 function isFileOrDirectory(event: DragEvent): boolean {
     if (!event.dataTransfer?.types) {
         return false;
@@ -27,9 +29,7 @@ const UploadButton = () => {
     const name = ServerContext.useStoreState((state) => state.server.data?.name);
     const uuid = ServerContext.useStoreState((state) => state.server.data?.uuid);
     const directory = ServerContext.useStoreState((state) => state.files.directory);
-    const { clearFileUploads, removeFileUpload, pushFileUpload } = ServerContext.useStoreActions(
-        (actions) => actions.files,
-    );
+    const { removeFileUpload, pushFileUpload } = ServerContext.useStoreActions((actions) => actions.files);
 
     useEventListener(
         'dragenter',
@@ -55,40 +55,66 @@ const UploadButton = () => {
 
     const onFileSubmission = (files: FileList) => {
         clearAndAddHttpError();
+        if (!uuid) return;
         const list = Array.from(files);
         if (list.some((file) => !file.size || (!file.type && file.size === 4096))) {
             return addError('Folder uploads are not supported at this time.', 'Error');
         }
 
-        const uploads = list.map((file) => {
+        // Upload a few at a time. Starting every file at once (hundreds of mods)
+        // saturates the uplink, so the panel requests for upload URLs queue
+        // behind the uploads and hit the 20s API timeout, and one failure used
+        // to cancel the whole batch.
+        // The store keeps each controller so the per-file cancel button still works.
+        const controllers = new Map<string, AbortController>();
+        list.forEach((file) => {
             const controller = new AbortController();
+            controllers.set(file.name, controller);
             pushFileUpload({
                 name: file.name,
                 data: { abort: controller, loaded: 0, total: file.size },
             });
-
-            return () =>
-                getFileUploadUrl(uuid).then((url) =>
-                    axios
-                        .post(
-                            url,
-                            { files: file },
-                            {
-                                signal: controller.signal,
-                                headers: { 'Content-Type': 'multipart/form-data' },
-                                params: { directory },
-                            },
-                        )
-                        .then(() => timeouts.push(setTimeout(() => removeFileUpload(file.name), 500))),
-                );
         });
 
-        Promise.all(uploads.map((fn) => fn()))
-            .then(() => mutate())
-            .catch((error) => {
-                clearFileUploads();
-                clearAndAddHttpError(error);
-            });
+        const failed: string[] = [];
+        let next = 0;
+        const worker = async () => {
+            while (next < list.length) {
+                const file = list[next++];
+                if (!file) continue;
+                const controller = controllers.get(file.name) ?? new AbortController();
+                if (controller.signal.aborted) continue;
+                try {
+                    const url = await getFileUploadUrl(uuid);
+                    await axios.post(
+                        url,
+                        { files: file },
+                        {
+                            signal: controller.signal,
+                            timeout: 0,
+                            headers: { 'Content-Type': 'multipart/form-data' },
+                            params: { directory },
+                        },
+                    );
+                    timeouts.push(setTimeout(() => removeFileUpload(file.name), 500));
+                } catch (error) {
+                    if (!axios.isCancel(error)) failed.push(file.name);
+                    removeFileUpload(file.name);
+                }
+            }
+        };
+
+        void Promise.all(Array.from({ length: Math.min(UPLOAD_CONCURRENCY, list.length) }, worker)).then(() => {
+            mutate();
+            if (failed.length) {
+                addError(
+                    `${failed.length} of ${list.length} file(s) failed to upload: ${failed.slice(0, 10).join(', ')}${
+                        failed.length > 10 ? ', ...' : ''
+                    }. Try those again.`,
+                    'Upload',
+                );
+            }
+        });
     };
 
     return (

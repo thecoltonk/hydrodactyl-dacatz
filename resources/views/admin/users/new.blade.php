@@ -89,9 +89,22 @@
                     <h3 class="box-title">Password</h3>
                 </div>
                 <div class="box-body">
-                    <div class="alert alert-info">
-                        <p>A password is required: this panel doesn't send emails, so new users can't set their own. Give them this password and have them change it under Account after signing in.</p>
-                    </div>
+                    @if(\Pterodactyl\Services\Discord\DiscordInvites::enabled())
+                        <div class="alert alert-info">
+                            <p>Enter their Discord username and leave the password blank: the bot DMs them a link to set their own. Or set a password here and give it to them yourself.</p>
+                        </div>
+                        <div class="form-group">
+                            <label for="discord" class="control-label">Discord username</label>
+                            <div>
+                                <input type="text" name="discord" class="form-control" maxlength="64" value="{{ old('discord') }}" placeholder="their Discord username" />
+                                <p class="text-muted small">They must be in the Da Catz Discord server.</p>
+                            </div>
+                        </div>
+                    @else
+                        <div class="alert alert-info">
+                            <p>A password is required: this panel doesn't send emails, so new users can't set their own. Give them this password and have them change it under Account after signing in. (Turn on Discord invites in Settings → Discord to DM them a setup link instead.)</p>
+                        </div>
+                    @endif
                     <div id="gen_pass" class=" alert alert-success" style="display:none;margin-bottom: 10px;"></div>
                     <div class="form-group">
                         <label for="pass" class="control-label">Password</label>

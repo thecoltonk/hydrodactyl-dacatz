@@ -158,6 +158,29 @@
         </div>
     </div>
     <div class="col-xs-12">
+        <div class="box">
+            <div class="box-header with-border">
+                <h3 class="box-title">Discord</h3>
+            </div>
+            <div class="box-body">
+                @if($user->discord_id)
+                    <p class="no-margin">Linked to <strong>{{ $user->discord_username ?? $user->discord_id }}</strong>. "Resend invite" DMs them a fresh link to set their password (it also works as a password reset).</p>
+                @else
+                    <p class="no-margin">Not linked. Enter their Discord username to link it and DM them a link to set their password.</p>
+                @endif
+            </div>
+            <div class="box-footer">
+                <form action="{{ route('admin.users.discord-invite', $user->id) }}" method="POST" class="form-inline">
+                    {!! csrf_field() !!}
+                    @unless($user->discord_id)
+                        <input type="text" name="discord" class="form-control input-sm" placeholder="Discord username" maxlength="64" required />
+                    @endunless
+                    <input type="submit" class="btn btn-sm btn-primary" value="{{ $user->discord_id ? 'Resend invite' : 'Link and send invite' }}" />
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-xs-12">
         <div class="box box-danger">
             <div class="box-header with-border">
                 <h3 class="box-title">Delete User</h3>

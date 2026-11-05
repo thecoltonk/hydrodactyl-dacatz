@@ -20,6 +20,8 @@ class DiscordAccountController extends ClientApiController
             'linked' => $user->discord_id !== null,
             'username' => $user->discord_username,
             'invite_url' => $invite !== '' ? $invite : null,
+            // New accounts are invited by Discord DM instead of email.
+            'invites' => \Pterodactyl\Services\Discord\DiscordInvites::enabled(),
         ];
     }
 
