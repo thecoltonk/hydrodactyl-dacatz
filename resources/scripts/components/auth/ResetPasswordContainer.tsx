@@ -3,17 +3,15 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { object, ref, string } from 'yup';
 import performPasswordReset from '@/api/auth/performPasswordReset';
-import LoginFormContainer from '@/components/auth/LoginFormContainer';
+import LoginFormContainer, { TitleSection } from '@/components/auth/LoginFormContainer';
 import Button from '@/components/elements/Button';
 import Captcha, { getCaptchaResponse } from '@/components/elements/Captcha';
-import ContentBox from '@/components/elements/ContentBox';
 import Field from '@/components/elements/Field';
 import Input from '@/components/elements/Input';
+import { BRAND_NAME } from '@/lib/branding';
 import CaptchaManager from '@/lib/captcha';
 
 import useFlash from '@/plugins/useFlash';
-
-import Logo from '../elements/HydroLogo';
 
 interface Values {
     password: string;
@@ -50,20 +48,14 @@ function ResetPasswordContainer() {
         if (CaptchaManager.isEnabled()) {
             const fieldName = CaptchaManager.getProviderInstance().getResponseFieldName();
 
-            console.log('Captcha enabled, response:', captchaResponse, 'fieldName:', fieldName);
-
             if (fieldName) {
                 if (captchaResponse) {
                     resetData = {
                         ...resetData,
                         [fieldName]: captchaResponse,
                     };
-
-                    console.log('Adding captcha to reset data:');
-                    console.debug(resetData);
                 } else {
                     console.error('Captcha enabled but no response available');
-                    console.log(captchaResponse);
                     clearAndAddHttpError({
                         error: new Error('Please complete the captcha verification.'),
                     });
@@ -71,8 +63,6 @@ function ResetPasswordContainer() {
                     return;
                 }
             }
-        } else {
-            console.log('Captcha not enabled');
         }
 
         performPasswordReset(email, resetData)
@@ -91,82 +81,76 @@ function ResetPasswordContainer() {
     };
 
     return (
-        <ContentBox>
-            <Formik
-                onSubmit={submit}
-                initialValues={{
-                    password: '',
-                    password_confirmation: '',
-                }}
-                validationSchema={object().shape({
-                    password: string()
-                        .required('A new password is required.')
-                        .min(8, 'Your new password should be at least 8 characters in length.'),
-                    password_confirmation: string()
-                        .required('Your new password does not match.')
-                        .oneOf([ref('password')], 'Your new password does not match.'),
-                })}
-            >
-                {({ isSubmitting }) => (
-                    <LoginFormContainer className={`w-full flex`}>
-                        <Link to='/'>
-                            <div className='flex h-12 mb-4 items-center w-full'>
-                                <Logo />
-                            </div>
-                        </Link>
-                        <div aria-hidden className='my-8 bg-[#ffffff33] min-h-[1px]'></div>
-
-                        <div className='text-center'>
-                            <Input className='text-center' value={email} disabled />
-                        </div>
-                        <div className={`mt-6`}>
-                            <Field
-                                label={'New Password'}
-                                name={'password'}
-                                type={'password'}
-                                description={'Passwords must be at least 8 characters in length.'}
-                            />
-                        </div>
-                        <div className={`mt-6`}>
-                            <Field label={'Confirm New Password'} name={'password_confirmation'} type={'password'} />
-                        </div>
-                        <Captcha
-                            className='mt-6'
-                            onError={(error) => {
-                                console.error('Captcha error:', error);
-                                clearAndAddHttpError({
-                                    error: new Error('Captcha verification failed. Please try again.'),
-                                });
-                            }}
-                        />
-
-                        <div className={`mt-6`}>
-                            <Button
-                                className='w-full mt-4 rounded-full bg-brand border-0 ring-0 outline-hidden capitalize font-bold text-sm py-2'
-                                size={'xlarge'}
-                                type={'submit'}
-                                disabled={isSubmitting}
-                                isLoading={isSubmitting}
-                            >
-                                Reset Password
-                            </Button>
-                        </div>
-                        <div aria-hidden className='my-8 bg-[#ffffff33] min-h-[1px]'></div>
-
-                        <div
-                            className={`text-center w-full rounded-lg bg-[#ffffff33] border-0 ring-0 outline-hidden capitalize font-bold text-sm py-3`}
+        <Formik
+            onSubmit={submit}
+            initialValues={{
+                password: '',
+                password_confirmation: '',
+            }}
+            validationSchema={object().shape({
+                password: string()
+                    .required('A new password is required.')
+                    .min(8, 'Your new password should be at least 8 characters in length.'),
+                password_confirmation: string()
+                    .required('Your new password does not match.')
+                    .oneOf([ref('password')], 'Your new password does not match.'),
+            })}
+        >
+            {({ isSubmitting }) => (
+                <LoginFormContainer className='mx-auto flex w-full max-w-md flex-col gap-6 rounded-2xl border border-cream-500/10 bg-bg-raised p-8 shadow-xl shadow-black/40'>
+                    <TitleSection
+                        title='Set your password'
+                        subtitle={`Choose a password for your ${BRAND_NAME} account.`}
+                    />
+                    <div>
+                        <label htmlFor='reset-email' className='mb-1 block text-sm text-secondary'>
+                            Account
+                        </label>
+                        <Input id='reset-email' value={email} disabled />
+                    </div>
+                    <Field
+                        id='password'
+                        label={'New password'}
+                        name={'password'}
+                        type={'password'}
+                        description={'At least 8 characters.'}
+                        disabled={isSubmitting}
+                    />
+                    <Field
+                        id='password_confirmation'
+                        label={'Confirm new password'}
+                        name={'password_confirmation'}
+                        type={'password'}
+                        disabled={isSubmitting}
+                    />
+                    <Captcha
+                        onError={(error) => {
+                            console.error('Captcha error:', error);
+                            clearAndAddHttpError({
+                                error: new Error('Captcha verification failed. Please try again.'),
+                            });
+                        }}
+                    />
+                    <div className='flex w-full flex-col gap-4 sm:flex-row sm:justify-between sm:items-center'>
+                        <Button
+                            className='bg-mocha-100 rounded-lg p-2 px-4 text-black hover:cursor-pointer hover:bg-mocha-200 ease-in-out w-full sm:w-auto'
+                            size={'xlarge'}
+                            type={'submit'}
+                            disabled={isSubmitting}
+                            isLoading={isSubmitting}
                         >
-                            <Link
-                                to={'/auth/login'}
-                                className={`text-sm text-white tracking-wide uppercase no-underline hover:text-neutral-700 border-color-[#ffffff33]`}
-                            >
-                                Return to Login
-                            </Link>
-                        </div>
-                    </LoginFormContainer>
-                )}
-            </Formik>
-        </ContentBox>
+                            Save password
+                        </Button>
+                        <Link
+                            to='/auth/login'
+                            className='text-center text-xs text-secondary hover:underline sm:text-right'
+                        >
+                            Back to sign in
+                        </Link>
+                    </div>
+                </LoginFormContainer>
+            )}
+        </Formik>
     );
 }
 
