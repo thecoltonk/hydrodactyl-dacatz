@@ -138,6 +138,15 @@ class InstallModpackJob extends Job implements ShouldQueue
             foreach ((array) ($this->plan['override_dirs'] ?? ['overrides', 'server-overrides']) as $folder) {
                 $this->merge($daemon, $server, self::WORK . '/' . $folder, '', 0);
             }
+
+            // Never report success for a modpack that ended up with no mods.
+            $mods = $this->modCount($daemon, $server);
+            $expectsMods = $serverPack || array_filter($files, fn ($file) => str_starts_with((string) $file['path'], 'mods/')) !== [];
+            if ($expectsMods && !$mods) {
+                throw new \RuntimeException($serverPack
+                    ? "The server pack didn't contain a mods folder the panel could find, so no mods were installed. The unpacked pack was left in /" . self::WORK . ' to look at.'
+                    : 'No mods ended up in /mods. The unpacked pack was left in /' . self::WORK . ' to look at.');
+            }
             $daemon->delete($server, '/', [self::WORK]);
 
             Activity::actor($this->user)->event('server:modpack.installed')
@@ -195,17 +204,56 @@ class InstallModpackJob extends Job implements ShouldQueue
      */
     private function serverPackRoot(ModpackDaemon $daemon, Server $server): string
     {
+        // Server packs are often wrapped in a folder, sometimes with loose
+        // README/.url files next to it. Walk down to the folder that actually
+        // holds the server (the one with a mods folder).
         $root = self::WORK;
-        for ($i = 0; $i < 2; $i++) {
-            $entries = array_values(array_filter($daemon->list($server, '/' . $root), fn ($entry) => ($entry['name'] ?? '') !== 'pack.zip'));
-            $names = array_column($entries, 'name');
-            if (in_array('mods', $names, true) || count($entries) !== 1 || !($entries[0]['directory'] ?? false)) {
+        for ($i = 0; $i < 3; $i++) {
+            $entries = array_values(array_filter(
+                $daemon->list($server, '/' . $root),
+                fn ($entry) => !in_array($entry['name'] ?? '', ['pack.zip', '__MACOSX'], true),
+            ));
+            $directories = array_values(array_filter($entries, fn ($entry) => (bool) ($entry['directory'] ?? false)));
+            $names = array_column($directories, 'name');
+            if (in_array('mods', $names, true)) {
                 break;
             }
-            $root .= '/' . $entries[0]['name'];
+            if (count($directories) === 1) {
+                $root .= '/' . $directories[0]['name'];
+                continue;
+            }
+            // Several folders: step into the single one that has a mods folder.
+            $withMods = [];
+            foreach ($directories as $directory) {
+                try {
+                    $children = array_column($daemon->list($server, '/' . $root . '/' . $directory['name']), 'name');
+                } catch (\Throwable) {
+                    continue;
+                }
+                if (in_array('mods', $children, true)) {
+                    $withMods[] = $directory['name'];
+                }
+            }
+            if (count($withMods) !== 1) {
+                break;
+            }
+            $root .= '/' . $withMods[0];
         }
 
         return $root;
+    }
+
+    /** Number of .jar files in /mods, or null when the folder is missing. */
+    private function modCount(ModpackDaemon $daemon, Server $server): ?int
+    {
+        try {
+            return count(array_filter(
+                $daemon->list($server, '/mods'),
+                fn ($entry) => !($entry['directory'] ?? false) && str_ends_with(strtolower((string) ($entry['name'] ?? '')), '.jar'),
+            ));
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**
@@ -240,7 +288,7 @@ class InstallModpackJob extends Job implements ShouldQueue
                 continue;
             }
             if ($serverPack && $depth === 0 && ($name === 'pack.zip' || $name === 'libraries' || $name === 'eula.txt'
-                || preg_match('/\.(jar|sh|bat|cmd|ps1)$/i', $name))) {
+                || preg_match('/\.(jar|sh|bat|cmd|ps1|url)$/i', $name))) {
                 continue;
             }
             $from = $source . '/' . $name;
