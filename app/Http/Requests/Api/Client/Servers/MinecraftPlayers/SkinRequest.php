@@ -11,7 +11,8 @@ class SkinRequest extends GetPlayersRequest
     {
         $server = $this->route('server');
 
-        return parent::authorize() && $server instanceof Server && app(PlayerTarget::class)->supports($server);
+        return parent::authorize() && $server instanceof Server && app(PlayerTarget::class)->supports($server)
+            && $this->user()->can(\Pterodactyl\Models\Permission::ACTION_PLAYERS_SKINS, $server);
     }
 
     public function validationData(): array

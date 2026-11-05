@@ -1,4 +1,16 @@
-import { AntennaSignal, Calendar, Copy, Database, FolderOpen, Gear, Person, Server, Shield } from '@gravity-ui/icons';
+import {
+    AntennaSignal,
+    Box,
+    Calendar,
+    Copy,
+    Database,
+    FolderOpen,
+    Gear,
+    Person,
+    Persons,
+    Server,
+    Shield,
+} from '@gravity-ui/icons';
 import { type Actions, useStoreActions, useStoreState } from 'easy-peasy';
 import { Form, Formik } from 'formik';
 import { useEffect } from 'react';
@@ -40,6 +52,8 @@ const ICON_MAP: Record<string, typeof Shield> = {
     startup: Gear,
     database: Database,
     schedule: Calendar,
+    players: Persons,
+    modpack: Box,
 };
 
 const PermissionIcon = ({ name }: { name: string }) => {

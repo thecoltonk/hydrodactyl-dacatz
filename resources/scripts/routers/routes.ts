@@ -191,7 +191,7 @@ const routes: Routes = {
         {
             route: 'modpacks/*',
             path: 'modpacks',
-            permission: 'startup.software',
+            permission: 'modpack.*',
             name: 'Modpacks',
             component: ModpacksContainer,
             icon: ArrowDownToLine,
@@ -201,7 +201,7 @@ const routes: Routes = {
         {
             route: 'players/*',
             path: 'players',
-            permission: 'control.console',
+            permission: 'players.*',
             name: 'Players',
             component: PlayersContainer,
             icon: Person,

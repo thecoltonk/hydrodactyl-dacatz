@@ -81,7 +81,7 @@ class DiscordInvites
      *
      * @throws DisplayException
      */
-    public static function sendSetupLink(User $user, array $member, string $reason): void
+    public static function sendSetupLink(User $user, array $member, string $reason, ?string $title = null): void
     {
         $token = Password::broker()->createToken($user);
         $url = url('/auth/password/reset/' . $token . '?email=' . urlencode($user->email));
@@ -90,11 +90,11 @@ class DiscordInvites
 
         $payload = [
             'embeds' => [[
-                'title' => "You're invited to {$brand}",
+                'title' => $title ?? "You're invited to {$brand}",
                 'color' => DiscordNotifier::GREEN,
                 'description' => DiscordNotifier::escape($reason, 200) . "\n\n"
                     . 'Your panel username is **' . DiscordNotifier::escape($user->username) . '**. '
-                    . 'Use the button to set a password, then sign in with your username or email.',
+                    . 'Use the button to set a ' . ($title === null ? '' : 'new ') . 'password, then sign in with your username or email.',
                 'footer' => ['text' => "{$brand} · link works once, for {$hours} " . ($hours === 1 ? 'hour' : 'hours')],
                 'timestamp' => now()->toIso8601String(),
             ]],

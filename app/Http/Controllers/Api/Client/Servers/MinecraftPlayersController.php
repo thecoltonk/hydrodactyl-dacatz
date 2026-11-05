@@ -315,7 +315,8 @@ class MinecraftPlayersController extends ClientApiController
 
     private function saveFirst(GetInventoryRequest $request, Server $server): void
     {
-        if (!$request->boolean('save')) {
+        // save-all is a console command, so it needs the moderate permission.
+        if (!$request->boolean('save') || !$request->user()->can(Permission::ACTION_PLAYERS_MODERATE, $server)) {
             return;
         }
         try {
@@ -329,18 +330,17 @@ class MinecraftPlayersController extends ClientApiController
     private function capabilities(User $user, Server $server): array
     {
         if (!$this->targets->supports($server)) {
-            return ['moderate' => false, 'operator' => false, 'inventory' => false, 'edit_inventory' => false];
+            return ['moderate' => false, 'operator' => false, 'inventory' => false, 'edit_inventory' => false, 'skins' => false];
         }
-        $console = $user->can(Permission::ACTION_CONTROL_CONSOLE, $server);
+        $read = $user->can(Permission::ACTION_PLAYERS_READ, $server);
+        $moderate = $read && $user->can(Permission::ACTION_PLAYERS_MODERATE, $server);
 
         return [
-            'moderate' => $console,
-            'operator' => $console && ($user->root_admin || $user->id === $server->owner_id),
-            'inventory' => $console && $user->can(Permission::ACTION_FILE_READ, $server)
-                && $user->can(Permission::ACTION_FILE_READ_CONTENT, $server),
-            'edit_inventory' => $console && $user->can(Permission::ACTION_FILE_READ, $server)
-                && $user->can(Permission::ACTION_FILE_READ_CONTENT, $server)
-                && $user->can(Permission::ACTION_FILE_UPDATE, $server),
+            'moderate' => $moderate,
+            'operator' => $moderate && ($user->root_admin || $user->id === $server->owner_id),
+            'inventory' => $read,
+            'edit_inventory' => $read && $user->can(Permission::ACTION_PLAYERS_INVENTORY, $server),
+            'skins' => $read && $user->can(Permission::ACTION_PLAYERS_SKINS, $server),
         ];
     }
 

@@ -9,7 +9,7 @@ class BrowseModpacksRequest extends ClientApiRequest
 {
     public function permission(): string
     {
-        return Permission::ACTION_STARTUP_SOFTWARE;
+        return Permission::ACTION_MODPACK_INSTALL;
     }
 
     public function rules(): array

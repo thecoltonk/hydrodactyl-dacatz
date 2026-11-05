@@ -1,6 +1,6 @@
 import type { FormikHelpers } from 'formik';
 import { Formik } from 'formik';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { object, string } from 'yup';
 import login from '@/api/auth/login';
 import LoginFormContainer, { TitleSection } from '@/components/auth/LoginFormContainer';
@@ -131,9 +131,12 @@ function LoginContainer() {
                         >
                             Sign in
                         </Button>
-                        <span className='text-center text-xs text-secondary sm:text-right'>
-                            Forgot your password? Ask an admin to reset it.
-                        </span>
+                        <Link
+                            to='/auth/password'
+                            className='text-center text-xs text-secondary hover:underline sm:text-right'
+                        >
+                            Forgot your password?
+                        </Link>
                     </div>
                 </LoginFormContainer>
             )}

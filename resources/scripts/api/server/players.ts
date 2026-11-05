@@ -12,6 +12,7 @@ export interface PlayerCapabilities {
     operator: boolean;
     inventory: boolean;
     edit_inventory?: boolean;
+    skins?: boolean;
 }
 
 export interface KnownPlayer {

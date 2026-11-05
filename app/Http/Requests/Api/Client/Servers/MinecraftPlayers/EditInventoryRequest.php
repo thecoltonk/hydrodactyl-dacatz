@@ -12,7 +12,7 @@ class EditInventoryRequest extends GetInventoryRequest
         $server = $this->route('server');
 
         return parent::authorize() && $server instanceof Server
-            && $this->user()->can(Permission::ACTION_FILE_UPDATE, $server);
+            && $this->user()->can(Permission::ACTION_PLAYERS_INVENTORY, $server);
     }
 
     public function rules(): array

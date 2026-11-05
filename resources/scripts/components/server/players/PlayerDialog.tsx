@@ -376,7 +376,7 @@ export default function PlayerDialog({
                                         uuid={uuid}
                                         name={player.name}
                                         skin={skin}
-                                        canEdit={capabilities.moderate}
+                                        canEdit={Boolean(capabilities.skins ?? capabilities.moderate)}
                                         onChanged={onSkinChanged}
                                     />
                                 ) : (
@@ -459,29 +459,35 @@ export default function PlayerDialog({
                                                 Only the server owner and panel admins can OP or de-OP players.
                                             </p>
                                         )}
+                                    </>
+                                )}
+                                {(capabilities.moderate || capabilities.edit_inventory) && (
+                                    <>
                                         <h3 className='mcp-tools-title'>
                                             {icon(TriangleExclamation, 16)}
                                             Quick actions
                                         </h3>
                                         <div className='mcp-action-grid'>
-                                            <Button
-                                                type='button'
-                                                variant='secondary'
-                                                disabled={busy}
-                                                onClick={() =>
-                                                    confirmThen(
-                                                        'kill',
-                                                        () =>
-                                                            void quick(
-                                                                'kill',
-                                                                {},
-                                                                `Killed ${player.name}. They must be online.`,
-                                                            ),
-                                                    )
-                                                }
-                                            >
-                                                {confirming === 'kill' ? 'Tap again to kill' : 'Kill'}
-                                            </Button>
+                                            {capabilities.moderate && (
+                                                <Button
+                                                    type='button'
+                                                    variant='secondary'
+                                                    disabled={busy}
+                                                    onClick={() =>
+                                                        confirmThen(
+                                                            'kill',
+                                                            () =>
+                                                                void quick(
+                                                                    'kill',
+                                                                    {},
+                                                                    `Killed ${player.name}. They must be online.`,
+                                                                ),
+                                                        )
+                                                    }
+                                                >
+                                                    {confirming === 'kill' ? 'Tap again to kill' : 'Kill'}
+                                                </Button>
+                                            )}
                                             {capabilities.edit_inventory && (
                                                 <>
                                                     <Button

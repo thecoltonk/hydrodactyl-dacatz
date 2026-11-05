@@ -261,7 +261,7 @@ const UnifiedRouter = () => {
                                           tabName: 'players',
                                           ref: NavigationPlayers,
                                           end: true,
-                                          permission: 'control.console',
+                                          permission: 'players.*',
                                       },
                                       {
                                           to: `/server/${id}/modpacks`,
@@ -270,7 +270,7 @@ const UnifiedRouter = () => {
                                           tabName: 'modpacks',
                                           ref: NavigationModpacks,
                                           end: true,
-                                          permission: 'startup.software',
+                                          permission: 'modpack.*',
                                       },
                                   ]
                                 : []),
@@ -397,6 +397,19 @@ const UnifiedRouter = () => {
                   end: true,
               },
           ];
+    // Drop items the user can't open. Hidden items used to keep an empty slot,
+    // which threw off the sidebar's highlight (it floated below the menu).
+    const serverPermissions = ServerContext.useStoreState((state) => state.server.permissions);
+    const allowed = (permission?: string | string[]) => {
+        if (!permission || !isServerRoute || serverPermissions[0] === '*') return true;
+        return (Array.isArray(permission) ? permission : [permission]).some((entry) =>
+            entry.endsWith('.*')
+                ? serverPermissions.some((owned) => owned.startsWith(`${entry.slice(0, -2)}.`))
+                : serverPermissions.includes(entry),
+        );
+    };
+    const visibleNavItems = navItems.filter((item) => allowed((item as { permission?: string | string[] }).permission));
+
     const bottomNavItems = customNavItems;
 
     return (
@@ -407,9 +420,13 @@ const UnifiedRouter = () => {
                         <AppHeader serverId={isServerRoute ? serverInternalId?.toString() : undefined} />
 
                         <div className='flex flex-col lg:flex-row h-full w-full overflow-hidden relative'>
-                            <Sidebar navItems={navItems} bottomNavItems={bottomNavItems} className='hidden lg:flex' />
-                            <MobileSidebar navItems={navItems} bottomNavItems={bottomNavItems} />
-                            <BottomNav items={navItems} />
+                            <Sidebar
+                                navItems={visibleNavItems}
+                                bottomNavItems={bottomNavItems}
+                                className='hidden lg:flex'
+                            />
+                            <MobileSidebar navItems={visibleNavItems} bottomNavItems={bottomNavItems} />
+                            <BottomNav items={visibleNavItems} />
 
                             {/* server-specific components - only render when we have server data */}
                             {isServerRoute && uuid && id && (

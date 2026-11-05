@@ -13,7 +13,8 @@ class PlayerActionRequest extends GetPlayersRequest
             return false;
         }
         $server = $this->route('server');
-        if (!$server instanceof Server || !app(PlayerTarget::class)->supports($server)) {
+        if (!$server instanceof Server || !app(PlayerTarget::class)->supports($server)
+            || !$this->user()->can(\Pterodactyl\Models\Permission::ACTION_PLAYERS_MODERATE, $server)) {
             return false;
         }
         // Operator status grants powerful in-game commands, so only the owner or a

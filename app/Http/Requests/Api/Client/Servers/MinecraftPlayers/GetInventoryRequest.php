@@ -12,10 +12,9 @@ class GetInventoryRequest extends GetPlayersRequest
     {
         $server = $this->route('server');
 
+        // parent: players.read
         return parent::authorize() && $server instanceof Server
-            && app(PlayerTarget::class)->supports($server)
-            && $this->user()->can(Permission::ACTION_FILE_READ, $server)
-            && $this->user()->can(Permission::ACTION_FILE_READ_CONTENT, $server);
+            && app(PlayerTarget::class)->supports($server);
     }
 
     public function validationData(): array

@@ -12,7 +12,7 @@ class WipePlayerRequest extends GetInventoryRequest
         $server = $this->route('server');
 
         return parent::authorize() && $server instanceof Server
-            && $this->user()->can(Permission::ACTION_FILE_DELETE, $server);
+            && $this->user()->can(Permission::ACTION_PLAYERS_INVENTORY, $server);
     }
 
     public function rules(): array

@@ -37,7 +37,7 @@ const ForgotPasswordContainer = () => {
                 addFlash({
                     type: 'success',
                     title: 'Success',
-                    message: response.data.status || 'Email sent!',
+                    message: response.data.status || 'Reset link sent.',
                 });
             })
             .catch((error) => {
@@ -62,13 +62,14 @@ const ForgotPasswordContainer = () => {
             })}
         >
             {({ isSubmitting }) => (
-                <LoginFormContainer className={`w-full flex flex-col`}>
-                    <TitleSection title='Forgot Password' />
-                    <div className='text-sm mb-6'>We&apos;ll send you an email with a link to reset your password.</div>
+                <LoginFormContainer className='mx-auto flex w-full max-w-md flex-col gap-6 rounded-2xl border border-cream-500/10 bg-bg-raised p-8 shadow-xl shadow-black/40'>
+                    <TitleSection
+                        title='Forgot your password?'
+                        subtitle="Enter your account's email. If your account has Discord linked, the bot DMs you a reset link."
+                    />
                     <Field id='email' label={'Email'} name={'email'} type={'email'} />
 
                     <Captcha
-                        className='mt-6'
                         onError={(error) => {
                             console.error('Captcha error:', error);
                             addFlash({
@@ -79,19 +80,19 @@ const ForgotPasswordContainer = () => {
                         }}
                     />
 
-                    <div className='flex w-full flex-col gap-3 mt-6 sm:flex-row sm:justify-between sm:items-center'>
+                    <div className='flex w-full flex-col gap-4 sm:flex-row sm:justify-between sm:items-center'>
                         <Button
-                            className={`bg-mocha-100 text-black p-2 px-4 rounded-full border-0 ring-0 outline-hidden capitalize w-full sm:w-auto`}
+                            className='bg-mocha-100 rounded-lg p-2 px-4 text-black hover:cursor-pointer hover:bg-mocha-200 ease-in-out w-full sm:w-auto'
                             type='submit'
                             size='xlarge'
                             isLoading={isSubmitting}
                             disabled={isSubmitting}
                         >
-                            Send Email
+                            Send reset link
                         </Button>
 
                         <SecondaryLink to='/auth/login' className='text-center sm:text-right'>
-                            Return to Login?
+                            Back to sign in
                         </SecondaryLink>
                     </div>
                 </LoginFormContainer>

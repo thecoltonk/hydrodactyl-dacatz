@@ -85,7 +85,9 @@ class ResetPasswordController extends Controller
         // If the user is not using 2FA log them in, otherwise skip this step and force a
         // fresh login where they'll be prompted to enter a token.
         if (!$user->use_totp) {
-            $this->guard()->login($user);
+            // Remember me: the API authenticates with the remember cookie, so a
+            // plain session login left the first page failing with "Unauthorized".
+            $this->guard()->login($user, true);
         }
 
         $this->hasTwoFactor = $user->use_totp;

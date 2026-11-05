@@ -7,18 +7,7 @@ use Pterodactyl\Models\Permission;
 
 class InstallModpackRequest extends BrowseModpacksRequest
 {
-    /**
-     * A fresh install wipes every file and changes the server's software, so it
-     * needs the same rights as changing software plus file deletion.
-     */
-    public function authorize(): bool
-    {
-        $server = $this->route('server');
-
-        return parent::authorize() && $server instanceof Server
-            && $this->user()->can(Permission::ACTION_FILE_DELETE, $server)
-            && $this->user()->can(Permission::ACTION_FILE_CREATE, $server);
-    }
+    // parent: modpack.install, whose description warns that installing wipes the server.
 
     public function rules(): array
     {

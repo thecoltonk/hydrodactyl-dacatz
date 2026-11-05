@@ -71,6 +71,13 @@ class Permission extends Model
 
     public const ACTION_MOD_DOWNLOAD = 'mod.download';
 
+    public const ACTION_PLAYERS_READ = 'players.read';
+    public const ACTION_PLAYERS_MODERATE = 'players.moderate';
+    public const ACTION_PLAYERS_INVENTORY = 'players.inventory';
+    public const ACTION_PLAYERS_SKINS = 'players.skins';
+
+    public const ACTION_MODPACK_INSTALL = 'modpack.install';
+
     /**
      * Should timestamps be used on this model.
      */
@@ -213,6 +220,23 @@ class Permission extends Model
             'description' => 'Permissions that control a user\'s access to the server activity logs.',
             'keys' => [
                 'read' => 'Allows a user to view the activity logs for the server.',
+            ],
+        ],
+
+        'players' => [
+            'description' => 'Permissions for the Players page on Minecraft servers.',
+            'keys' => [
+                'read' => 'View the player list, player profiles, stats, saved inventories, and the ops, whitelist and ban lists.',
+                'moderate' => 'Kick, ban, whitelist, change game mode, teleport and kill players. OP/de-OP is still owner and admin only.',
+                'inventory' => 'Edit or clear player inventories and ender chests, and wipe a player\'s saved data.',
+                'skins' => 'Upload and apply custom player skins (offline-mode servers).',
+            ],
+        ],
+
+        'modpack' => [
+            'description' => 'Permissions for the Modpacks page.',
+            'keys' => [
+                'install' => 'Browse and install modpacks. Danger: installing wipes every server file and changes the server software.',
             ],
         ],
 
