@@ -195,6 +195,68 @@ class InventoryService
         return $world;
     }
 
+    /**
+     * Ops, whitelist and bans straight from the server's JSON files.
+     *
+     * @return array{ops: array, whitelist: array, banned: array}
+     */
+    public function lists(Server $server): array
+    {
+        $clean = function (?array $entries, array $keys): array {
+            $out = [];
+            foreach ($entries ?? [] as $entry) {
+                if (!is_array($entry) || !is_string($entry['name'] ?? null)
+                    || !preg_match('/\A[A-Za-z0-9_.]{1,32}\z/', $entry['name'])) {
+                    continue;
+                }
+                $row = ['name' => $entry['name'], 'uuid' => $this->uuid($entry['uuid'] ?? null) ? strtolower($entry['uuid']) : null];
+                foreach ($keys as $key) {
+                    $value = $entry[$key] ?? null;
+                    $row[$key] = is_scalar($value) ? mb_substr((string) $value, 0, 200) : null;
+                }
+                $out[] = $row;
+            }
+            usort($out, fn ($a, $b) => strcasecmp($a['name'], $b['name']));
+
+            return array_slice($out, 0, 2000);
+        };
+
+        return [
+            'ops' => $clean($this->optionalJson($server, '/ops.json'), ['level']),
+            'whitelist' => $clean($this->optionalJson($server, '/whitelist.json'), []),
+            'banned' => $clean($this->optionalJson($server, '/banned-players.json'), ['reason', 'created', 'expires', 'source']),
+        ];
+    }
+
+    /**
+     * Delete a player's save file, stats and advancements, so they start over
+     * the next time they join. Returns the files that were removed.
+     */
+    public function wipe(Server $server, string $name, ?string $knownUuid = null): array
+    {
+        ['uuid' => $uuid, 'world' => $world] = $this->resolve($server, $name, $knownUuid);
+        $removed = [];
+        foreach ([
+            '/playerdata/' => [$uuid . '.dat', $uuid . '.dat_old'],
+            '/players/data/' => [$uuid . '.dat', $uuid . '.dat_old'],
+            '/stats/' => [$uuid . '.json'],
+            '/players/stats/' => [$uuid . '.json'],
+            '/advancements/' => [$uuid . '.json'],
+            '/players/advancements/' => [$uuid . '.json'],
+        ] as $folder => $names) {
+            $root = '/' . $world . $folder;
+            $present = array_values(array_intersect($names, $this->files->names($server, $root)));
+            if ($present !== []) {
+                $this->files->delete($server, $root, $present);
+                foreach ($present as $file) {
+                    $removed[] = ltrim($root, '/') . $file;
+                }
+            }
+        }
+
+        return $removed;
+    }
+
     public function offlineUuid(string $name): string
     {
         $hex = md5('OfflinePlayer:' . $name);

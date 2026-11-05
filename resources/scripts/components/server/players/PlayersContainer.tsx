@@ -18,7 +18,16 @@ import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 
 import { httpErrorToHuman } from '@/api/http';
-import { getKnownPlayers, getPlayers, type KnownPlayer, type Player, type PlayerList } from '@/api/server/players';
+import {
+    getKnownPlayers,
+    getPlayerLists,
+    getPlayers,
+    type KnownPlayer,
+    type ListedPlayer,
+    type Player,
+    type PlayerList,
+    type PlayerLists,
+} from '@/api/server/players';
 import { Input } from '@/components/elements/inputs';
 import { MainPageHeader } from '@/components/elements/MainPageHeader';
 import ServerContentBlock from '@/components/elements/ServerContentBlock';
@@ -36,14 +45,24 @@ const icon = (Icon: typeof Persons, size: number, className?: string) => (
 );
 
 const STOP_POLLING = [401, 403, 404, 409, 429];
-const SHOW_OFFLINE_KEY = 'hydrodactyl:players:show-offline';
+const VIEW_KEY = 'hydrodactyl:players:view';
+type View = 'online' | 'all' | 'ops' | 'whitelist' | 'banned';
+const VIEWS: { view: View; label: string }[] = [
+    { view: 'online', label: 'Online' },
+    { view: 'all', label: 'Everyone' },
+    { view: 'ops', label: 'Ops' },
+    { view: 'whitelist', label: 'Whitelist' },
+    { view: 'banned', label: 'Banned' },
+];
 
-const readShowOffline = () => {
+const readView = (): View => {
     try {
-        // On unless the user turned it off.
-        return window.localStorage.getItem(SHOW_OFFLINE_KEY) !== '0';
+        const saved = window.localStorage.getItem(VIEW_KEY);
+        if (VIEWS.some((entry) => entry.view === saved)) return saved as View;
+        // Older setting from the "Show offline players" checkbox.
+        return window.localStorage.getItem('hydrodactyl:players:show-offline') === '0' ? 'online' : 'all';
     } catch {
-        return true;
+        return 'all';
     }
 };
 
@@ -64,15 +83,17 @@ const PlayersContainer = () => {
     const [notice, setNotice] = useState('');
     const [lookup, setLookup] = useState('');
     const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
-    const [showOffline, setShowOfflineState] = useState(readShowOffline);
-    const setShowOffline = (next: boolean) => {
-        setShowOfflineState(next);
+    const [view, setViewState] = useState<View>(readView);
+    const setView = (next: View) => {
+        setViewState(next);
         try {
-            window.localStorage.setItem(SHOW_OFFLINE_KEY, next ? '1' : '0');
+            window.localStorage.setItem(VIEW_KEY, next);
         } catch {
             // Preference just won't stick.
         }
     };
+    const showOffline = view === 'all';
+    const listView = view === 'ops' || view === 'whitelist' || view === 'banned' ? view : null;
 
     // biome-ignore lint/correctness/useExhaustiveDependencies: reset when switching servers
     useEffect(() => {
@@ -114,6 +135,14 @@ const PlayersContainer = () => {
         showOffline && capabilities.inventory ? ['minecraft-players:known', uuid] : null,
         () => getKnownPlayers(uuid),
         { revalidateOnFocus: false, shouldRetryOnError: false, refreshInterval: 60000 },
+    );
+    const lists = useSWR<PlayerLists, AxiosError>(
+        listView && capabilities.inventory ? ['minecraft-players:lists', uuid] : null,
+        () => getPlayerLists(uuid),
+        { revalidateOnFocus: true, shouldRetryOnError: false, refreshInterval: 30000 },
+    );
+    const listed = (listView ? (lists.data?.[listView] ?? []) : []).filter((player) =>
+        player.name.toLowerCase().includes(search.trim().toLowerCase()),
     );
     const onlineNames = new Set(players.map((player) => player.name.toLowerCase()));
     const offlinePlayers = (known.data ?? []).filter(
@@ -300,20 +329,19 @@ const PlayersContainer = () => {
                         <div className='mcp-toolbar-actions'>
                             {capabilities.inventory && (
                                 <fieldset className='mcp-segment' aria-label='Which players to show'>
-                                    <button
-                                        type='button'
-                                        aria-pressed={!showOffline}
-                                        onClick={() => setShowOffline(false)}
-                                    >
-                                        Online
-                                    </button>
-                                    <button
-                                        type='button'
-                                        aria-pressed={showOffline}
-                                        onClick={() => setShowOffline(true)}
-                                    >
-                                        Everyone
-                                    </button>
+                                    {VIEWS.filter((entry) => entry.view === 'online' || capabilities.inventory).map(
+                                        (entry) => (
+                                            <button
+                                                key={entry.view}
+                                                type='button'
+                                                aria-pressed={view === entry.view}
+                                                onClick={() => setView(entry.view)}
+                                            >
+                                                {entry.label}
+                                                {entry.view === 'online' && available ? ` ${players.length}` : ''}
+                                            </button>
+                                        ),
+                                    )}
                                 </fieldset>
                             )}
                             <label className='mcp-search' htmlFor='mcp-search'>
@@ -325,7 +353,7 @@ const PlayersContainer = () => {
                                     placeholder='Search players…'
                                     value={search}
                                     onChange={(event) => setSearch(event.target.value)}
-                                    disabled={!players.length && !showOffline}
+                                    disabled={!players.length && view === 'online'}
                                 />
                             </label>
                             <Button
@@ -343,7 +371,66 @@ const PlayersContainer = () => {
                         </div>
                     </div>
 
-                    {query.isLoading || data?.status === 'pending' ? (
+                    {listView ? (
+                        lists.isLoading ? (
+                            <div className='mcp-empty'>
+                                {icon(ArrowsRotateRight, 30, 'mcp-spin')}
+                                <h3>Loading…</h3>
+                            </div>
+                        ) : lists.error ? (
+                            <div className='mcp-empty'>
+                                {icon(PlugConnection, 30)}
+                                <h3>Couldn't read the list</h3>
+                                <p>{httpErrorToHuman(lists.error)}</p>
+                            </div>
+                        ) : !listed.length ? (
+                            <div className='mcp-empty'>
+                                {icon(Persons, 30)}
+                                <h3>
+                                    {search.trim()
+                                        ? 'No matching players'
+                                        : listView === 'ops'
+                                          ? 'No operators'
+                                          : listView === 'whitelist'
+                                            ? 'Nobody is whitelisted'
+                                            : 'Nobody is banned'}
+                                </h3>
+                            </div>
+                        ) : (
+                            <ul className='mcp-player-grid'>
+                                {listed.map((player: ListedPlayer) => (
+                                    <li className='mcp-player' key={`${listView}-${player.name.toLowerCase()}`}>
+                                        <button
+                                            type='button'
+                                            className='mcp-player-main'
+                                            onClick={() => setSelectedPlayer({ name: player.name, uuid: player.uuid })}
+                                            aria-label={`Open ${player.name}`}
+                                        >
+                                            <PlayerAvatar
+                                                name={player.name}
+                                                skinUrl={data?.skins?.[player.name.toLowerCase()]?.url}
+                                                offline={offline}
+                                            />
+                                            <div className='mcp-player-info'>
+                                                <strong>{player.name}</strong>
+                                                <span>
+                                                    {listView === 'ops'
+                                                        ? `Operator · level ${player.level ?? '4'}`
+                                                        : listView === 'whitelist'
+                                                          ? onlineNames.has(player.name.toLowerCase())
+                                                              ? 'Whitelisted · online'
+                                                              : 'Whitelisted'
+                                                          : player.reason && player.reason !== 'Banned by an operator.'
+                                                            ? `Banned: ${player.reason}`
+                                                            : `Banned${player.source ? ` by ${player.source}` : ''}`}
+                                                </span>
+                                            </div>
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        )
+                    ) : query.isLoading || data?.status === 'pending' ? (
                         <div className='mcp-empty'>
                             {icon(ArrowsRotateRight, 30, 'mcp-spin')}
                             <h3>Checking your server</h3>
@@ -388,15 +475,22 @@ const PlayersContainer = () => {
                         <ul className='mcp-player-grid'>
                             {filtered.map((player) => (
                                 <li className='mcp-player' key={player.name.toLowerCase()}>
-                                    <PlayerAvatar
-                                        name={player.name}
-                                        skinUrl={data?.skins?.[player.name.toLowerCase()]?.url}
-                                        offline={offline}
-                                    />
-                                    <div className='mcp-player-info'>
-                                        <strong>{player.name}</strong>
-                                        <span>{isError ? 'Last reported' : 'Reported online'}</span>
-                                    </div>
+                                    <button
+                                        type='button'
+                                        className='mcp-player-main'
+                                        onClick={() => setSelectedPlayer(player)}
+                                        aria-label={`Open ${player.name}`}
+                                    >
+                                        <PlayerAvatar
+                                            name={player.name}
+                                            skinUrl={data?.skins?.[player.name.toLowerCase()]?.url}
+                                            offline={offline}
+                                        />
+                                        <div className='mcp-player-info'>
+                                            <strong>{player.name}</strong>
+                                            <span>{isError ? 'Last reported' : 'Online'}</span>
+                                        </div>
+                                    </button>
                                     <button
                                         type='button'
                                         className='mcp-copy'
@@ -406,21 +500,12 @@ const PlayersContainer = () => {
                                     >
                                         {icon(Copy, 16)}
                                     </button>
-                                    <button
-                                        type='button'
-                                        className='mcp-copy'
-                                        aria-label={`Manage ${player.name}`}
-                                        title='Player profile and actions'
-                                        onClick={() => setSelectedPlayer(player)}
-                                    >
-                                        {icon(PersonGear, 17)}
-                                    </button>
                                 </li>
                             ))}
                         </ul>
                     )}
 
-                    {showOffline && capabilities.inventory && (
+                    {!listView && showOffline && capabilities.inventory && (
                         <div className='mcp-offline-section'>
                             <h3>
                                 Offline players
@@ -438,25 +523,23 @@ const PlayersContainer = () => {
                                 <ul className='mcp-player-grid'>
                                     {offlinePlayers.slice(0, 150).map((player) => (
                                         <li className='mcp-player mcp-player-offline' key={player.uuid}>
-                                            <PlayerAvatar
-                                                name={player.name}
-                                                skinUrl={data?.skins?.[player.name.toLowerCase()]?.url}
-                                                offline={offline}
-                                            />
-                                            <div className='mcp-player-info'>
-                                                <strong>{player.name}</strong>
-                                                <span>{lastSeen(player.last_seen)}</span>
-                                            </div>
                                             <button
                                                 type='button'
-                                                className='mcp-copy'
-                                                aria-label={`Manage ${player.name}`}
-                                                title='Player profile, inventory and stats'
+                                                className='mcp-player-main'
                                                 onClick={() =>
                                                     setSelectedPlayer({ name: player.name, uuid: player.uuid })
                                                 }
+                                                aria-label={`Open ${player.name}`}
                                             >
-                                                {icon(PersonGear, 17)}
+                                                <PlayerAvatar
+                                                    name={player.name}
+                                                    skinUrl={data?.skins?.[player.name.toLowerCase()]?.url}
+                                                    offline={offline}
+                                                />
+                                                <div className='mcp-player-info'>
+                                                    <strong>{player.name}</strong>
+                                                    <span>{lastSeen(player.last_seen)}</span>
+                                                </div>
                                             </button>
                                         </li>
                                     ))}

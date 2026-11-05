@@ -57,6 +57,55 @@ class PlayerFiles
     }
 
     /**
+     * Stream a (possibly large) file to a local path. Returns false when it is
+     * bigger than $limit.
+     *
+     * @throws DaemonConnectionException
+     */
+    public function download(Server $server, string $path, string $destination, int $limit): bool
+    {
+        try {
+            $response = $this->files($server)->getHttpClient()->get(
+                '/api/servers/' . $server->uuid . '/files/contents',
+                ['query' => ['file' => $path], 'stream' => true, 'timeout' => 120, 'connect_timeout' => 5, 'read_timeout' => 30]
+            );
+            $stream = $response->getBody();
+            $out = fopen($destination, 'wb');
+            $written = 0;
+            try {
+                while (!$stream->eof()) {
+                    $chunk = $stream->read(65536);
+                    $written += strlen($chunk);
+                    if ($written > $limit) {
+                        return false;
+                    }
+                    fwrite($out, $chunk);
+                }
+            } finally {
+                fclose($out);
+                $stream->close();
+                if ($written > $limit) {
+                    @unlink($destination);
+                }
+            }
+
+            return true;
+        } catch (TransferException $exception) {
+            throw new DaemonConnectionException($exception);
+        }
+    }
+
+    /**
+     * @throws DaemonConnectionException
+     */
+    public function delete(Server $server, string $root, array $names): void
+    {
+        if ($names !== []) {
+            $this->files($server)->deleteFiles($root, array_values($names));
+        }
+    }
+
+    /**
      * @throws DaemonConnectionException
      */
     public function write(Server $server, string $path, string $content): void

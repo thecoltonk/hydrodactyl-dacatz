@@ -20,7 +20,7 @@ class PlayerCommand
             throw new \InvalidArgumentException('Invalid player name or reason.');
         }
         $command = match ($action) {
-            'kick', 'ban', 'pardon', 'op', 'deop' => $action . ' ' . $name,
+            'kick', 'ban', 'pardon', 'op', 'deop', 'kill', 'clear' => $action . ' ' . $name,
             'whitelist_add' => 'whitelist add ' . $name,
             'whitelist_remove' => 'whitelist remove ' . $name,
             'gamemode' => $this->gamemode($name, $extra['mode'] ?? ''),

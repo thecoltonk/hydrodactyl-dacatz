@@ -75,7 +75,9 @@ export type PlayerAction =
     | 'whitelist_remove'
     | 'gamemode'
     | 'teleport'
-    | 'teleport_to_player';
+    | 'teleport_to_player'
+    | 'kill'
+    | 'clear';
 
 export type GameMode = 'survival' | 'creative' | 'adventure' | 'spectator';
 
@@ -281,3 +283,37 @@ export const editInventory = async (
     );
     return data.attributes;
 };
+
+export interface ListedPlayer {
+    name: string;
+    uuid: string | null;
+    level?: string | null;
+    reason?: string | null;
+    created?: string | null;
+    expires?: string | null;
+    source?: string | null;
+}
+
+export interface PlayerLists {
+    ops: ListedPlayer[];
+    whitelist: ListedPlayer[];
+    banned: ListedPlayer[];
+}
+
+export const getPlayerLists = async (uuid: string): Promise<PlayerLists> => {
+    const { data } = await http.get<{ attributes: PlayerLists }>(`/api/client/servers/${uuid}/players/lists`);
+    return data.attributes;
+};
+
+/** Delete a player's save, stats and advancements. They must be offline. */
+export const wipePlayer = async (uuid: string, player: Player): Promise<string> => {
+    const { data } = await http.delete<{ attributes: { message: string } }>(
+        `/api/client/servers/${uuid}/players/${encodeURIComponent(player.name)}/data`,
+        { data: { uuid: player.uuid ?? undefined, confirm_name: player.name } },
+    );
+    return data.attributes.message;
+};
+
+/** Panel URL for a modded item's icon (read from the server's mod jars). */
+export const moddedItemIcon = (uuid: string, id: string) =>
+    `/api/client/servers/${uuid}/players/item-icon?id=${encodeURIComponent(id)}`;

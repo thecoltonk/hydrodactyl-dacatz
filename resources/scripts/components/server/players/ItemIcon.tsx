@@ -1,6 +1,8 @@
 // Ported from Aquadactyl/MCPlayersJava (BSD 2-Clause, Copyright (c) Aquadactyl contributors).
 import { Book, Boxes3, Cube, Gem, Hammer, Heart, Shield } from '@gravity-ui/icons';
 import { useState } from 'react';
+import { moddedItemIcon } from '@/api/server/players';
+import { ServerContext } from '@/state/server';
 
 // Minecraft inventory renders, pinned to a fixed revision rather than a moving branch.
 export const ITEM_RENDER_SOURCE = 'https://github.com/Owen1212055/mc-assets';
@@ -32,7 +34,12 @@ const fallbackIcon = (id: string) =>
     );
 
 export default function ItemIcon({ id }: { id: string }) {
-    const src = minecraftItemImage(id);
+    const server = ServerContext.useStoreState((state) => state.server.data?.uuid);
+    // Vanilla renders come from the asset CDN; modded items are read from the
+    // server's own mod jars by the panel.
+    const src =
+        minecraftItemImage(id) ??
+        (server && /^[a-z0-9_.-]{1,64}:[a-z0-9_./-]{1,96}$/u.test(id) ? moddedItemIcon(server, id) : null);
     const [loadedSource, setLoadedSource] = useState<string | null>(null);
     const [failedSource, setFailedSource] = useState<string | null>(null);
     const available = src !== null && failedSource !== src;
@@ -51,7 +58,7 @@ export default function ItemIcon({ id }: { id: string }) {
                     height={32}
                     loading='lazy'
                     decoding='async'
-                    crossOrigin='anonymous'
+                    crossOrigin={src.startsWith('/') ? undefined : 'anonymous'}
                     referrerPolicy='no-referrer'
                     draggable={false}
                     onLoad={() => setLoadedSource(src)}

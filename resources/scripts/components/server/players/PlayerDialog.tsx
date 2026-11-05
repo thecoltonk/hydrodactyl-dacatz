@@ -18,6 +18,7 @@ import {
     type GameMode,
     getInventory,
     getPlayerStats,
+    type InventoryArea,
     type InventoryChange,
     NITROCRAFT,
     nitroImage,
@@ -27,6 +28,7 @@ import {
     type PlayerCapabilities,
     type PlayerSkin,
     sendPlayerAction,
+    wipePlayer,
 } from '@/api/server/players';
 import { Dialog } from '@/components/elements/dialog';
 import { Input } from '@/components/elements/inputs';
@@ -163,6 +165,62 @@ export default function PlayerDialog({
             onNotice(result.message);
             // Online edits land in the live game; save so the file view catches up.
             saveNext.current = result.mode === 'online';
+            await inventory.mutate();
+        } catch (failure) {
+            setError(httpErrorToHuman(failure as Error));
+        } finally {
+            setBusy(false);
+        }
+    };
+    // Two-step confirm for destructive one-click actions.
+    const [confirming, setConfirming] = useState<string | null>(null);
+    const [wiping, setWiping] = useState(false);
+    const [wipeName, setWipeName] = useState('');
+    const confirmThen = (key: string, run: () => void) => {
+        if (confirming === key) {
+            setConfirming(null);
+            run();
+        } else {
+            setConfirming(key);
+        }
+    };
+    const clearArea = async (area: InventoryArea) => {
+        const items = inventory.data?.[area] ?? [];
+        if (busy || !items.length) return;
+        setBusy(true);
+        setError('');
+        setSubmitted('');
+        try {
+            const changes: InventoryChange[] = items.map((item) => ({
+                area,
+                slot: item.slot,
+                id: null,
+                count: null,
+                expect: item.id,
+            }));
+            const result = await editInventory(uuid, player, changes);
+            const message = `${area === 'inventory' ? 'Inventory' : 'Ender chest'} cleared. ${result.message}`;
+            setSubmitted(message);
+            onNotice(message);
+            saveNext.current = result.mode === 'online';
+            await inventory.mutate();
+        } catch (failure) {
+            setError(httpErrorToHuman(failure as Error));
+        } finally {
+            setBusy(false);
+        }
+    };
+    const wipe = async () => {
+        if (busy || wipeName !== player.name) return;
+        setBusy(true);
+        setError('');
+        setSubmitted('');
+        try {
+            const message = await wipePlayer(uuid, player);
+            setSubmitted(message);
+            onNotice(message);
+            setWiping(false);
+            setWipeName('');
             await inventory.mutate();
         } catch (failure) {
             setError(httpErrorToHuman(failure as Error));
@@ -400,6 +458,104 @@ export default function PlayerDialog({
                                                 {icon(CrownDiamond, 13)}
                                                 Only the server owner and panel admins can OP or de-OP players.
                                             </p>
+                                        )}
+                                        <h3 className='mcp-tools-title'>
+                                            {icon(TriangleExclamation, 16)}
+                                            Quick actions
+                                        </h3>
+                                        <div className='mcp-action-grid'>
+                                            <Button
+                                                type='button'
+                                                variant='secondary'
+                                                disabled={busy}
+                                                onClick={() =>
+                                                    confirmThen(
+                                                        'kill',
+                                                        () =>
+                                                            void quick(
+                                                                'kill',
+                                                                {},
+                                                                `Killed ${player.name}. They must be online.`,
+                                                            ),
+                                                    )
+                                                }
+                                            >
+                                                {confirming === 'kill' ? 'Tap again to kill' : 'Kill'}
+                                            </Button>
+                                            {capabilities.edit_inventory && (
+                                                <>
+                                                    <Button
+                                                        type='button'
+                                                        variant='secondary'
+                                                        disabled={busy || !inventory.data?.inventory.length}
+                                                        onClick={() =>
+                                                            confirmThen('inventory', () => void clearArea('inventory'))
+                                                        }
+                                                    >
+                                                        {confirming === 'inventory'
+                                                            ? 'Tap again to clear'
+                                                            : 'Clear inventory'}
+                                                    </Button>
+                                                    <Button
+                                                        type='button'
+                                                        variant='secondary'
+                                                        disabled={busy || !inventory.data?.ender_chest.length}
+                                                        onClick={() =>
+                                                            confirmThen('ender', () => void clearArea('ender_chest'))
+                                                        }
+                                                    >
+                                                        {confirming === 'ender'
+                                                            ? 'Tap again to clear'
+                                                            : 'Clear ender chest'}
+                                                    </Button>
+                                                    <Button
+                                                        type='button'
+                                                        variant='destructive'
+                                                        disabled={busy}
+                                                        onClick={() => {
+                                                            setWiping(true);
+                                                            setConfirming(null);
+                                                        }}
+                                                    >
+                                                        Wipe player data
+                                                    </Button>
+                                                </>
+                                            )}
+                                        </div>
+                                        {wiping && (
+                                            <div className='mcp-wipe'>
+                                                <p>
+                                                    Deletes {player.name}'s inventory, ender chest, location, stats and
+                                                    advancements. They start fresh the next time they join. They must be
+                                                    offline. Type <strong>{player.name}</strong> to confirm.
+                                                </p>
+                                                <div className='mcp-wipe-row'>
+                                                    <Input.Text
+                                                        aria-label='Type the player name to confirm'
+                                                        value={wipeName}
+                                                        placeholder={player.name}
+                                                        onChange={(event) => setWipeName(event.target.value)}
+                                                    />
+                                                    <Button
+                                                        type='button'
+                                                        variant='destructive'
+                                                        disabled={busy || wipeName !== player.name}
+                                                        onClick={() => void wipe()}
+                                                    >
+                                                        Wipe
+                                                    </Button>
+                                                    <Button
+                                                        type='button'
+                                                        variant='secondary'
+                                                        onClick={() => {
+                                                            setWiping(false);
+                                                            setWipeName('');
+                                                        }}
+                                                    >
+                                                        Cancel
+                                                    </Button>
+                                                </div>
+                                            </div>
                                         )}
                                     </>
                                 )}

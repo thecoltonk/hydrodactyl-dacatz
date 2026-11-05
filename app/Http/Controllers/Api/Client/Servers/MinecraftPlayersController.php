@@ -16,6 +16,9 @@ use Pterodactyl\Http\Controllers\Api\Client\ClientApiController;
 use Pterodactyl\Http\Requests\Api\Client\Servers\MinecraftPlayers\EditInventoryRequest;
 use Pterodactyl\Http\Requests\Api\Client\Servers\MinecraftPlayers\GetInventoryRequest;
 use Pterodactyl\Http\Requests\Api\Client\Servers\MinecraftPlayers\KnownPlayersRequest;
+use Pterodactyl\Http\Requests\Api\Client\Servers\MinecraftPlayers\WipePlayerRequest;
+use Pterodactyl\Http\Requests\Api\Client\Servers\MinecraftPlayers\ItemIconRequest;
+use Pterodactyl\Services\MinecraftPlayers\ItemIcons;
 use Pterodactyl\Http\Requests\Api\Client\Servers\MinecraftPlayers\GetPlayersRequest;
 use Pterodactyl\Http\Requests\Api\Client\Servers\MinecraftPlayers\PlayerActionRequest;
 use Pterodactyl\Models\Permission;
@@ -195,6 +198,62 @@ class MinecraftPlayersController extends ClientApiController
         $players = Cache::remember('minecraft-players:known:' . $server->uuid, 30, fn () => $inventories->known($server));
 
         return ['object' => 'minecraft_known_players', 'attributes' => ['players' => $players]];
+    }
+
+    /**
+     * Ops, whitelist and bans from the server's own JSON files.
+     */
+    public function lists(KnownPlayersRequest $request, Server $server, InventoryService $inventories): array
+    {
+        $lists = Cache::remember('minecraft-players:lists:' . $server->uuid, 10, fn () => $inventories->lists($server));
+
+        return ['object' => 'minecraft_player_lists', 'attributes' => $lists];
+    }
+
+    /**
+     * Delete a player's save, stats and advancements (they start fresh next join).
+     * Only while they're offline, or the server would write it right back.
+     */
+    public function wipe(WipePlayerRequest $request, Server $server, InventoryService $inventories): array
+    {
+        $data = $request->validated();
+        $online = $this->isOnline($server, $data['player']);
+        if ($online !== false) {
+            throw new \Symfony\Component\HttpKernel\Exception\HttpException(409, $online
+                ? $data['player'] . ' is online. Kick them first, then wipe.'
+                : "Can't tell whether " . $data['player'] . ' is online. Stop the server or enable query, then try again.');
+        }
+        $removed = $inventories->wipe($server, $data['player'], $data['uuid'] ?? null);
+
+        Activity::event('server:players.wiped')
+            ->property(['player' => $data['player'], 'files' => $removed])
+            ->log();
+        Cache::forget('minecraft-players:known:' . $server->uuid);
+
+        return ['object' => 'minecraft_player_wipe', 'attributes' => [
+            'removed' => $removed,
+            'message' => $removed === []
+                ? $data['player'] . ' had no saved data.'
+                : sprintf('Wiped %s: %d file(s) removed. They start fresh next time they join.', $data['player'], count($removed)),
+        ]];
+    }
+
+    /**
+     * PNG icon for a modded item, read from the server's mod jars.
+     */
+    public function itemIcon(ItemIconRequest $request, Server $server, ItemIcons $icons): \Illuminate\Http\Response
+    {
+        $result = $icons->icon($server, (string) $request->query('id'));
+        if ($result === 'pending' || $result === 'missing') {
+            return response('', $result === 'pending' ? 202 : 404, ['Cache-Control' => 'no-store']);
+        }
+
+        return response($result, 200, [
+            'Content-Type' => 'image/png',
+            'Cache-Control' => 'private, max-age=86400',
+            'X-Content-Type-Options' => 'nosniff',
+            'Content-Security-Policy' => "default-src 'none'",
+        ]);
     }
 
     /**

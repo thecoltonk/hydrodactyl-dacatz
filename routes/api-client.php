@@ -176,6 +176,13 @@ Route::group([
             ->name('api.client.servers.players.inventory');
         Route::get('/known', [MinecraftPlayersController::class, 'known'])
             ->middleware('throttle:20,1,mc-players-known');
+        Route::get('/lists', [MinecraftPlayersController::class, 'lists'])
+            ->middleware('throttle:30,1,mc-players-lists');
+        Route::get('/item-icon', [MinecraftPlayersController::class, 'itemIcon'])
+            ->middleware('throttle:600,1,mc-players-icons');
+        Route::delete('/{player}/data', [MinecraftPlayersController::class, 'wipe'])
+            ->where('player', '[A-Za-z0-9_]{1,16}')
+            ->middleware('throttle:10,1,mc-players-wipe');
         Route::put('/{player}/inventory', [MinecraftPlayersController::class, 'editInventory'])
             ->where('player', '[A-Za-z0-9_]{1,16}')
             ->middleware('throttle:20,1,mc-players-inventory-edit');
