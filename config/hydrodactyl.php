@@ -113,6 +113,10 @@ return [
     | its REST API only (no gateway connection), so there is no separate bot
     | process to run.
     */
+    // Swaps for Docker images deleted upstream, as JSON: {"old:tag": "new:tag"}.
+    // Built-in swaps (openjdk -> eclipse-temurin, etc.) live in ImageAliases.
+    'image_aliases' => json_decode((string) env('IMAGE_ALIASES', '{}'), true) ?: [],
+
     'discord' => [
         'enabled' => env('DISCORD_ENABLED', false),
         'application_id' => env('DISCORD_APPLICATION_ID', ''),

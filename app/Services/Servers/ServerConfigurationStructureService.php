@@ -2,6 +2,7 @@
 
 namespace Pterodactyl\Services\Servers;
 
+use Pterodactyl\Services\Eggs\ImageAliases;
 use Pterodactyl\Models\Mount;
 use Pterodactyl\Models\Server;
 
@@ -64,7 +65,7 @@ class ServerConfigurationStructureService
                 'oom_disabled' => $server->oom_disabled,
             ],
             'container' => [
-                'image' => $server->image,
+                'image' => ImageAliases::resolve($server->image),
                 // This field is deprecated — use the value in the "build" block.
                 //
                 // TODO: remove this key in V2.
@@ -120,7 +121,7 @@ class ServerConfigurationStructureService
                 'cpu' => (int) $server->cpu,
                 'threads' => $server->threads,
                 'disk' => (int) $server->disk,
-                'image' => $server->image,
+                'image' => ImageAliases::resolve($server->image),
             ],
             'service' => [
                 'egg' => $server->egg->uuid,

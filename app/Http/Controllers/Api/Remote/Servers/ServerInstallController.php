@@ -2,6 +2,7 @@
 
 namespace Pterodactyl\Http\Controllers\Api\Remote\Servers;
 
+use Pterodactyl\Services\Eggs\ImageAliases;
 use Pterodactyl\Services\Discord\DiscordNotifier;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
@@ -32,7 +33,8 @@ class ServerInstallController extends Controller
         $egg = $server->egg;
 
         return new JsonResponse([
-            'container_image' => $egg->copy_script_container,
+            // Swap images that were deleted upstream (e.g. openjdk) for working ones.
+            'container_image' => ImageAliases::resolve($egg->copy_script_container),
             'entrypoint' => $egg->copy_script_entry,
             'script' => $egg->copy_script_install,
         ]);
